@@ -3,29 +3,34 @@
 {% block content %}
 
 {% if user.is_authenticated %}
-<div class="container mt-2">
-
-    <h1>Process PDF: {{ uploaded_file.file.name }}</h1>
+<div class="container mt-4">
+    <h4>Process PDF: {{ uploaded_file.file.name }}</h4>
 
     <form method="POST" action="{% url 'process_pages' file_id=uploaded_file.id %}">
         {% csrf_token %}
         
         <h3>Select Pages</h3>
-        <div class="list-group">
+        <div class="row">
             {% for page in extracted_pages %}
-                <div>
-                    <h3>Page {{ page.page_num }}</h3>
-                    <img src="/{{ page.image_url }}" alt="Page {{ page.page_num }}" width="200">
-                    <p>{{ page.image_url }}</p>
+                <div class="col-md-3 mb-4">
+                    <div class="card">
+                        <img src="/{{ page.image_url }}" class="card-img-top" alt="Page {{ page.page_num }}" style="width:100%; height: auto;">
+                        <div class="card-body">
+                            <h5 class="card-title">Page {{ page.page_num }}</h5>
+                            <p class="card-text">Select this page for processing.</p>
+                            <div class="form-check">
+                                <input type="checkbox" name="selected_pages" value="{{ page.page_num }}" class="form-check-input">
+                                <label class="form-check-label" for="page{{ page.page_num }}">Select Page</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             {% endfor %}
-
-            
-            
-            
         </div>
-        
-        <button type="submit" class="btn btn-primary">Process Selected Pages</button>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary">Process Selected Pages</button>
+        </div>
     </form>
 </div>
 {% else %}
