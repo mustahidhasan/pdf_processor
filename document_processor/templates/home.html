@@ -1,37 +1,50 @@
 {% extends 'base.html' %}
 
 {% block content %}
-
-{% if user.is_authenticated %}
-
 <div class="container mt-5">
-    <h2>Home</h2>
-    <hr>
-    <button class="btn btn-success">upload file</button>
-    
-</div>
+    {% if user.is_authenticated %}
+        <!-- File Upload Form -->
+        <form method="POST" enctype="multipart/form-data" class="mb-4">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="uploaded_file" class="form-label">Upload a PDF File</label>
+                <input type="file" class="form-control" id="uploaded_file" name="uploaded_file" accept="application/pdf" required>
+            </div>
+            <button type="submit" class="btn btn-success">Upload File</button>
+        </form>
 
+        <!-- List of Uploaded Files -->
+        <h3>Uploaded Files</h3>
+        <ul class="list-group">
+            {% for file in uploaded_files %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ file }}
+                <form method="POST" style="display: inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_file" value="{{ file }}">
+                    <button type="submit" class="btn btn-danger btn-sm" title="Delete">&times;</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
 
-{% else %}
-<div class="col-md-6 offset-md-3">
-    <h1>Login</h1>
-    <br>
-    <form method="POST" action="{% url 'home' %}">
-        {% csrf_token %}
-        <div class="mb-3">
-            <input type="text" class="form-control" name="username" placeholder="Username" required>
+    {% else %}
+        <div class="col-md-6 offset-md-3">
+            <h1>Login</h1>
+            <br>
+            <form method="POST" action="{% url 'home' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="username" placeholder="Username" required>
+                </div>
+                <br>
+                <div class="mb-3">
+                    <input type="password" class="form-control" name="password" placeholder="Password" required>
+                </div>
+                <br>
+                <button type="submit" class="btn btn-secondary">Login</button>
+            </form>
         </div>
-        <br>
-        <div class="mb-3">
-            <input type="password" class="form-control" name="password" placeholder="Password" required>
-        </div>
-        <br>
-        <button type="submit" class="btn btn-secondary">Login</button>
-    </form>
+    {% endif %}
 </div>
-{% endif %}
-
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-
 {% endblock %}
