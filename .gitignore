@@ -170,4 +170,4 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 /document_processor/media/uploads/
-/document_processor/media/uploads_files/
+/document_processor/media/processed_files/

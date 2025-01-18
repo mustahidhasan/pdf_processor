@@ -17,7 +17,7 @@
                     <tr>
                         <th>Select</th>
                         <th>Page Number</th>
-                        <th>Content</th>
+                        <th>Page Image</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -27,11 +27,15 @@
                             <input type="checkbox" name="selected_pages" value="{{ page.page_num }}">
                         </td>
                         <td>Page {{ page.page_num }}</td>
-                        <td>{{ page.page_content|truncatewords:20 }}</td> <!-- Truncate content for display -->
+                        <td>
+                            <img src="{{ page.image_url }}" alt="Page {{ page.page_num }}" width="200">
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            
+            
             
         </div>
         
