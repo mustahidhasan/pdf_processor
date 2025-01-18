@@ -9,6 +9,7 @@ from django.conf import settings
 from .models import UploadedFile
 from .forms import SignUpForm
 
+
 def home(request):
     if request.method == "POST":
         # Handle Login
@@ -28,9 +29,13 @@ def home(request):
         if "uploaded_file" in request.FILES:
             uploaded_file = request.FILES["uploaded_file"]
             if uploaded_file.content_type == "application/pdf":  # Allow PDFs only
-                new_file = UploadedFile(file=uploaded_file, user=request.user)  # Link file with logged-in user
+                new_file = UploadedFile(
+                    file=uploaded_file, user=request.user
+                )  # Link file with logged-in user
                 new_file.save()
-                messages.success(request, f"File '{uploaded_file.name}' uploaded successfully!")
+                messages.success(
+                    request, f"File '{uploaded_file.name}' uploaded successfully!"
+                )
             else:
                 messages.error(request, "Only PDF files are allowed!")
             return redirect("home")
@@ -39,28 +44,35 @@ def home(request):
         if "delete_file" in request.POST:
             file_id = request.POST.get("delete_file")
             try:
-                file_to_delete = UploadedFile.objects.get(id=file_id, user=request.user)  # Ensure the file belongs to the logged-in user
+                file_to_delete = UploadedFile.objects.get(
+                    id=file_id, user=request.user
+                )  # Ensure the file belongs to the logged-in user
                 file_path = file_to_delete.file.path
                 if os.path.exists(file_path):
                     os.remove(file_path)  # Delete the file from the file system
                 file_to_delete.delete()  # Delete the record from the database
-                messages.success(request, f"File '{file_to_delete.file.name}' deleted successfully!")
+                messages.success(
+                    request, f"File '{file_to_delete.file.name}' deleted successfully!"
+                )
             except UploadedFile.DoesNotExist:
-                messages.error(request, "The file does not exist or you do not have permission to delete it!")
+                messages.error(
+                    request,
+                    "The file does not exist or you do not have permission to delete it!",
+                )
             return redirect("home")
-    
+
     # Conditionally add uploaded files to context if user is logged in
     if request.user.is_authenticated:
-        uploaded_files = UploadedFile.objects.filter(user=request.user)  # Fetch files only if user is logged in
+        uploaded_files = UploadedFile.objects.filter(
+            user=request.user
+        )  # Fetch files only if user is logged in
         context = {
             "uploaded_files": uploaded_files,
         }
     else:
         context = {}  # No context for anonymous users
-    
+
     return render(request, "home.html", context)
-
-
 
 
 def logout_user(request):
