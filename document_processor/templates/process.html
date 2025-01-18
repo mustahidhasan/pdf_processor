@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+{% if user.is_authenticated %}
+<div class="container mt-2">
+
+    <h1>Process PDF: {{ uploaded_file.file.name }}</h1>
+
+    <form method="POST" action="{% url 'process_pages' file_id=uploaded_file.id %}">
+        {% csrf_token %}
+        
+        <h3>Select Pages</h3>
+        <div class="list-group">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Select</th>
+                        <th>Page Number</th>
+                        <th>Content</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for page in extracted_pages %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" name="selected_pages" value="{{ page.page_num }}">
+                        </td>
+                        <td>Page {{ page.page_num }}</td>
+                        <td>{{ page.page_content|truncatewords:20 }}</td> <!-- Truncate content for display -->
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Process Selected Pages</button>
+    </form>
+</div>
+{% else %}
+<div class="col-md-6 offset-md-3">
+    <h1>Login</h1>
+    <br>
+    <form method="POST" action="{% url 'home' %}">
+        {% csrf_token %}
+        <div class="mb-3">
+            <input type="text" class="form-control" name="username" placeholder="Username" required>
+        </div>
+        <br>
+        <div class="mb-3">
+            <input type="password" class="form-control" name="password" placeholder="Password" required>
+        </div>
+        <br>
+        <button type="submit" class="btn btn-secondary">Login</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

@@ -34,7 +34,7 @@
                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
                 <!-- Process Button with margin-left for spacing -->
-                <form method="POST" action="{% url 'home' %}" style="display: inline;" class="m-1">
+                <form method="POST" action="{% url 'process' file_id=file.id %}" style="display: inline;" class="m-1">
                     {% csrf_token %}
                     <input type="hidden" name="delete_file" value="{{ file.id }}">
                     <button type="submit" class="btn btn-primary btn-sm ml-2">Process</button>
