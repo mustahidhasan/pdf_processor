@@ -48,13 +48,16 @@ def home(request):
             except UploadedFile.DoesNotExist:
                 messages.error(request, "The file does not exist or you do not have permission to delete it!")
             return redirect("home")
-
-    # Fetch the list of uploaded files for the logged-in user
-    uploaded_files = UploadedFile.objects.filter(user=request.user)
-
-    context = {
-        "uploaded_files": uploaded_files,
-    }
+    
+    # Conditionally add uploaded files to context if user is logged in
+    if request.user.is_authenticated:
+        uploaded_files = UploadedFile.objects.filter(user=request.user)  # Fetch files only if user is logged in
+        context = {
+            "uploaded_files": uploaded_files,
+        }
+    else:
+        context = {}  # No context for anonymous users
+    
     return render(request, "home.html", context)
 
 

@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
+{% if user.is_authenticated %}
 <div class="container mt-5">
 
     <!-- File Upload Form -->
@@ -34,4 +36,22 @@
     <p>No files uploaded yet.</p>
     {% endif %}
 </div>
+{% else %}
+<div class="col-md-6 offset-md-3">
+    <h1>Login</h1>
+    <br>
+    <form method="POST" action="{% url 'home' %}">
+        {% csrf_token %}
+        <div class="mb-3">
+            <input type="text" class="form-control" name="username" placeholder="Username" required>
+        </div>
+        <br>
+        <div class="mb-3">
+            <input type="password" class="form-control" name="password" placeholder="Password" required>
+        </div>
+        <br>
+        <button type="submit" class="btn btn-secondary">Login</button>
+    </form>
+</div>
+{% endif %}
 {% endblock %}

@@ -169,5 +169,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-/uploads
-/uploads_files
+/document_processor/uploads/
+/document_processor/uploads_files/
