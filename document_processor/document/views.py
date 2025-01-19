@@ -117,13 +117,20 @@ def process_pages(request, file_id):
 
             # Check response from the webhook
             if response.status_code == 200:
-                return JsonResponse({"success": "PDF processed and sent successfully."})
+                # return JsonResponse({"success": "PDF processed and sent successfully."})
+                messages.success(request, "PDF processed and sent successfully.")
+                return redirect('home')
             else:
-                return JsonResponse(
-                    {
-                        "error": f"Webhook response: {response.status_code} {response.text}"
-                    },
-                    status=response.status_code,
-                )
+                # return JsonResponse(
+                #     {
+                #         "error": f"Webhook response: {response.status_code} {response.text}"
+                #     },
+                #     status=response.status_code,
+                # )
+                messages.error(request, f"Webhook response: {response.status_code} {response.text}")
+                return redirect('home')
         except Exception as e:
-            return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
+            # return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
+            messages.error(request, f"Failed to send PDF: {e}")
+            return redirect('home')
+    
