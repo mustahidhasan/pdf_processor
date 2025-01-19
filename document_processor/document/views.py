@@ -1,11 +1,16 @@
 import os
-import os
+import requests
 from django.shortcuts import render, get_object_or_404, redirect
 from user.models import UploadedFile
 from pdf2image import convert_from_path
 from django.contrib import messages
 from django.conf import settings
 from .models import ProcessedImage  # Import the ProcessedImage model
+
+from PyPDF2 import PdfWriter, PdfReader
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 
 
 def process(request, file_id):
@@ -62,20 +67,63 @@ def process(request, file_id):
     )
 
 
+@csrf_exempt
 def process_pages(request, file_id):
-    # Ensure the file is retrieved only for the logged-in user
-    uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
+    if request.method == "POST":
+        # Get the uploaded file and selected pages
+        uploaded_file = get_object_or_404(
+            UploadedFile, id=file_id
+        )  # Assuming you have an UploadedFile model
+        selected_pages = request.POST.getlist(
+            "selected_pages"
+        )  # List of selected page numbers as strings
 
-    # Process the selected pages
-    selected_pages = request.POST.getlist("selected_pages")
+        if not selected_pages:
+            return JsonResponse({"error": "No pages selected."}, status=400)
 
-    if selected_pages:
-        # Here you can process the selected pages, for example, combining them or saving images, etc.
-        messages.success(
-            request, f"Successfully processed pages: {', '.join(selected_pages)}"
+        # Read the original PDF and extract the selected pages
+        original_pdf_path = (
+            uploaded_file.file.path
+        )  # Assuming UploadedFile model has a `file` field
+        new_pdf_path = "new_file.pdf"  # Path to save the new PDF temporarily
+
+        try:
+            pdf_reader = PdfReader(original_pdf_path)
+            pdf_writer = PdfWriter()
+
+            # Add selected pages to the new PDF
+            for page_num in selected_pages:
+                pdf_writer.add_page(
+                    pdf_reader.pages[int(page_num) - 1]
+                )  # Pages are zero-indexed
+
+            # Save the new PDF
+            with open(new_pdf_path, "wb") as output_pdf:
+                pdf_writer.write(output_pdf)
+        except Exception as e:
+            return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
+
+        # Send the new PDF to the webhook
+        webhook_url = (
+            "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
         )
-    else:
-        messages.error(request, "No pages selected for processing.")
+        headers = {"sender_name": "info+yedaya@kabuta.biz"}
 
-    # Redirect to the home page or another appropriate page
-    return redirect("home")
+        try:
+            with open(new_pdf_path, "rb") as new_pdf:
+                response = requests.post(
+                    webhook_url, headers=headers, files={"file": new_pdf}
+                )
+
+            # Check response from the webhook
+            if response.status_code == 200:
+                return JsonResponse({"success": "PDF processed and sent successfully."})
+            else:
+                return JsonResponse(
+                    {
+                        "error": f"Webhook response: {response.status_code} {response.text}"
+                    },
+                    status=response.status_code,
+                )
+        except Exception as e:
+            return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)

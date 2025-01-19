@@ -1,3 +1,5 @@
 Django
 PyPDF2
 pdf2image
+PyPDF2 
+requests
