@@ -66,7 +66,6 @@ def process(request, file_id):
         {"uploaded_file": uploaded_file, "extracted_pages": extracted_pages},
     )
 
-
 @csrf_exempt
 def process_pages(request, file_id):
     if request.method == "POST":
@@ -85,7 +84,14 @@ def process_pages(request, file_id):
         original_pdf_path = (
             uploaded_file.file.path
         )  # Assuming UploadedFile model has a `file` field
-        new_pdf_path = "new_file.pdf"  # Path to save the new PDF temporarily
+
+        # Define the directory and file path for the new PDF
+        new_pdf_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
+        new_pdf_path = os.path.join(new_pdf_dir, "new_file.pdf")
+
+        # Ensure the directory exists
+        if not os.path.exists(new_pdf_dir):
+            os.makedirs(new_pdf_dir)
 
         try:
             pdf_reader = PdfReader(original_pdf_path)
@@ -117,20 +123,12 @@ def process_pages(request, file_id):
 
             # Check response from the webhook
             if response.status_code == 200:
-                # return JsonResponse({"success": "PDF processed and sent successfully."})
                 messages.success(request, "PDF processed and sent successfully.")
                 return redirect('home')
             else:
-                # return JsonResponse(
-                #     {
-                #         "error": f"Webhook response: {response.status_code} {response.text}"
-                #     },
-                #     status=response.status_code,
-                # )
                 messages.error(request, f"Webhook response: {response.status_code} {response.text}")
                 return redirect('home')
         except Exception as e:
-            # return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
             messages.error(request, f"Failed to send PDF: {e}")
             return redirect('home')
-    
+    return redirect('home')

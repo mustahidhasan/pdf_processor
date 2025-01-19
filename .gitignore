@@ -171,3 +171,4 @@ cython_debug/
 .pypirc
 /document_processor/media/uploads/
 /document_processor/media/processed_files/
+/document_processor/media/processed_img_pdf/
