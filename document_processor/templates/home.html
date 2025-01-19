@@ -3,15 +3,51 @@
 {% block content %}
 
 {% if user.is_authenticated %}
+<div class="container mt-2">
 
-<div class="container mt-5">
-    <h2>Home</h2>
+    <!-- File Upload Form -->
+    <h2>Upload a File</h2>
+    <form method="POST" enctype="multipart/form-data" action="{% url 'home' %}">
+        {% csrf_token %}
+        <div class="mb-3">
+            <input type="file" name="uploaded_file" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-success">Upload</button>
+    </form>
+
     <hr>
+
+    <!-- List of Uploaded Files -->
+    <h2>Uploaded Files</h2>
+    {% if uploaded_files %}
+    <ul class="list-group">
+        {% for file in uploaded_files %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="{{ file.file.url }}" target="_blank">{{ file.file.name }}</a>
+            
+            <!-- Container for buttons to align them inline -->
+            <div class="d-flex">
+                <!-- Delete Button -->
+                <form method="POST" action="{% url 'home' %}" style="display: inline;" class="m-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_file" value="{{ file.id }}">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+                <!-- Process Button with margin-left for spacing -->
+                <form method="POST" action="{% url 'process' file_id=file.id %}" style="display: inline;" class="m-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_file" value="{{ file.id }}">
+                    <button type="submit" class="btn btn-primary btn-sm ml-2">Process</button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
     
-    
+    {% else %}
+    <p>No files uploaded yet.</p>
+    {% endif %}
 </div>
-
-
 {% else %}
 <div class="col-md-6 offset-md-3">
     <h1>Login</h1>
@@ -30,8 +66,4 @@
     </form>
 </div>
 {% endif %}
-
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-
 {% endblock %}
