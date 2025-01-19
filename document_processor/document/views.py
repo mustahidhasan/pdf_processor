@@ -66,6 +66,7 @@ def process(request, file_id):
         {"uploaded_file": uploaded_file, "extracted_pages": extracted_pages},
     )
 
+
 @csrf_exempt
 def process_pages(request, file_id):
     if request.method == "POST":
@@ -124,11 +125,13 @@ def process_pages(request, file_id):
             # Check response from the webhook
             if response.status_code == 200:
                 messages.success(request, "PDF processed and sent successfully.")
-                return redirect('home')
+                return redirect("home")
             else:
-                messages.error(request, f"Webhook response: {response.status_code} {response.text}")
-                return redirect('home')
+                messages.error(
+                    request, f"Webhook response: {response.status_code} {response.text}"
+                )
+                return redirect("home")
         except Exception as e:
             messages.error(request, f"Failed to send PDF: {e}")
-            return redirect('home')
-    return redirect('home')
+            return redirect("home")
+    return redirect("home")
