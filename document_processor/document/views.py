@@ -135,3 +135,6 @@ def process_pages(request, file_id):
             messages.error(request, f"Failed to send PDF: {e}")
             return redirect("home")
     return redirect("home")
+
+def processed_doc(request):
+    return render(request, "processed_document.html")
