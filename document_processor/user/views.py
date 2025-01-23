@@ -8,6 +8,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.conf import settings
 from .models import UploadedFile
 from .forms import SignUpForm
+from django.core.exceptions import ValidationError
 
 
 def home(request):
@@ -28,16 +29,25 @@ def home(request):
         # Handle File Upload
         if "uploaded_file" in request.FILES:
             uploaded_file = request.FILES["uploaded_file"]
-            if uploaded_file.content_type == "application/pdf":  # Allow PDFs only
-                new_file = UploadedFile(
-                    file=uploaded_file, user=request.user
-                )  # Link file with logged-in user
-                new_file.save()
-                messages.success(
-                    request, f"File '{uploaded_file.name}' uploaded successfully!"
-                )
+            
+            # Check if the file is a PDF
+            if uploaded_file.content_type == "application/pdf":
+                
+                # Check if the file size is less than or equal to 200 MB
+                MAX_SIZE = 200 * 1024 * 1024  # 200 MB in bytes
+                if uploaded_file.size > MAX_SIZE:
+                    messages.error(request, "The file is too large. Maximum size allowed is 200 MB.")
+                else:
+                    new_file = UploadedFile(
+                        file=uploaded_file, user=request.user
+                    )  # Link file with logged-in user
+                    new_file.save()
+                    messages.success(
+                        request, f"File '{uploaded_file.name}' uploaded successfully!"
+                    )
             else:
                 messages.error(request, "Only PDF files are allowed!")
+            
             return redirect("home")
 
         # Handle File Deletion
