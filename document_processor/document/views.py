@@ -12,6 +12,10 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 
+from django.contrib.auth.decorators import login_required
+from user.models import UploadedFile
+from itertools import groupby
+from operator import attrgetter
 
 def process(request, file_id):
     # Get the file from the database for the current user
@@ -136,5 +140,33 @@ def process_pages(request, file_id):
             return redirect("home")
     return redirect("home")
 
+
+@login_required
 def processed_doc(request):
-    return render(request, "processed_document.html")
+    """View to handle both new and processed documents for the logged-in user."""
+    user = request.user
+
+    # Fetch unprocessed files (files not linked to ProcessedImage)
+    unprocessed_files = UploadedFile.objects.filter(
+        user=user
+    ).exclude(id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)).order_by("-uploaded_at")
+
+    # Fetch processed images grouped by UploadedFile
+    processed_images = ProcessedImage.objects.filter(
+        uploaded_file__user=user
+    ).select_related("uploaded_file").order_by("uploaded_file", "page_num")
+
+    # Group processed images by uploaded_file
+    grouped_processed_files = {
+        uploaded_file: list(images)
+        for uploaded_file, images in groupby(processed_images, key=attrgetter("uploaded_file"))
+    }
+
+    return render(
+        request,
+        "processed_document.html",
+        {
+            "unprocessed_files": unprocessed_files,
+            "grouped_processed_files": grouped_processed_files,
+        },
+    )
