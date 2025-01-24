@@ -39,27 +39,40 @@
         </div>
 
         <!-- Processed Document Tab -->
-        <div class="tab-pane fade" id="processed-document" role="tabpanel" aria-labelledby="processed-document-tab">
-            <div class="mt-3">
-                <h2>Processed Documents</h2>
-                <hr>
-                {% if grouped_processed_files %}
-                    {% for uploaded_file, images in grouped_processed_files.items %}
-                        <h5>{{ uploaded_file.file.name }}</h5>
-                        <ul>
-                            {% for image in images %}
-                                <li>
-                                    Page {{ image.page_num }}: 
-                                    <img src="{{ image.image.url }}" alt="Processed Image" style="max-width: 200px;">
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endfor %}
-                {% else %}
-                    <p>No processed documents available.</p>
-                {% endif %}
-            </div>
-        </div>
+<div class="tab-pane fade" id="processed-document" role="tabpanel" aria-labelledby="processed-document-tab">
+    <div class="mt-3">
+        <h2>Processed Documents</h2>
+        <hr>
+        {% if grouped_processed_files %}
+            {% for uploaded_file, images in grouped_processed_files.items %}
+                <div class="accordion" id="processedFilesAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse-{{ forloop.counter }}">
+                                {{ uploaded_file.file.name }}
+                            </button>
+                        </h2>
+                        <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ forloop.counter }}" data-bs-parent="#processedFilesAccordion">
+                            <div class="accordion-body">
+                                <ul>
+                                    {% for image in images %}
+                                        <li>
+                                            Page {{ image.page_num }}: 
+                                            <img src="{{ image.image.url }}" alt="Processed Image" style="max-width: 200px;">
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No processed documents available.</p>
+        {% endif %}
+    </div>
+</div>
+
     </div>
 </div>
 {% else %}
