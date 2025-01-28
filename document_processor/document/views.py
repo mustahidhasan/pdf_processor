@@ -16,6 +16,7 @@ from django.contrib.auth.decorators import login_required
 from user.models import UploadedFile
 from itertools import groupby
 from operator import attrgetter
+from django.contrib.auth.models import User
 
 def process(request, file_id):
     # Get the file from the database for the current user
@@ -170,3 +171,33 @@ def processed_doc(request):
             "grouped_processed_files": grouped_processed_files,
         },
     )
+
+
+@csrf_exempt
+def upload_pdfs(request):
+    if request.method == 'POST':
+        sender_email = request.POST.get('sender_email_address')
+        files = request.FILES.getlist('files')
+
+        if not sender_email or not files:
+            return JsonResponse({'error': 'Email address and files are required.'}, status=400)
+
+        # Check if the sender_email exists in the User model
+        try:
+            user = User.objects.get(email=sender_email)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'Email address not associated with any user.'}, status=400)
+
+        # Save each uploaded file associated with the user
+        for file in files:
+            UploadedFile.objects.create(
+                file=file,
+                user=user
+            )
+
+        return JsonResponse({
+            'message': 'Files uploaded successfully.',
+            'uploaded_files': [{'file_name': file.name} for file in files]
+        }, status=201)
+
+    return JsonResponse({'error': 'Invalid request method.'}, status=405)
