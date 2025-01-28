@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 
 {% block content %}
-
 {% if user.is_authenticated %}
 <div class="container mt-4">
     <h4>Process PDF: {{ uploaded_file.file.name }}</h4>
@@ -9,6 +8,14 @@
     <form method="POST" action="{% url 'process_pages' file_id=uploaded_file.id %}">
         {% csrf_token %}
         
+        <h3>Select Pages (You can select a range like 1 to 5 or individual pages)</h3>
+        
+        <!-- Range Input Field for selecting pages -->
+        <div class="form-group">
+            <label for="page_range">Page Range (e.g., 1 to 5 or 1-5):</label>
+            <input type="text" class="form-control" id="page_range" name="page_range" placeholder="Enter range (e.g., 1 to 5)" oninput="selectPagesBasedOnRange()">
+        </div>
+
         <h3>Select Pages</h3>
         <div class="row">
             {% for page in extracted_pages %}
@@ -20,7 +27,8 @@
                             <h5 class="card-title">Page {{ page.page_num }}</h5>
                             <p class="card-text">Select this page for processing.</p>
                             <div class="form-check">
-                                <input type="checkbox" name="selected_groups" value="{{ page.page_num }}" class="form-check-input">
+                                <!-- Checkbox for selecting the page -->
+                                <input type="checkbox" name="selected_groups" value="{{ page.page_num }}" id="page{{ page.page_num }}" class="form-check-input">
                                 <label class="form-check-label" for="page{{ page.page_num }}">Select Page</label>
                             </div>
                         </div>
@@ -52,6 +60,36 @@
         </div>
     </form>
 </div>
+
+<script>
+// JavaScript function to select pages based on the input range
+function selectPagesBasedOnRange() {
+    const rangeInput = document.getElementById('page_range').value.trim();
+    const checkboxes = document.querySelectorAll('input[name="selected_groups"]');
+
+    // Clear any previously selected checkboxes
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+
+    // If range input matches "X-Y" or "X to Y", select pages in that range
+    const rangeMatch = rangeInput.match(/^(\d+)\s*(?:to|-)\s*(\d+)$/);
+
+    if (rangeMatch) {
+        const start = parseInt(rangeMatch[1], 10);
+        const end = parseInt(rangeMatch[2], 10);
+
+        // Ensure the range is valid
+        if (start <= end) {
+            for (let i = start; i <= end; i++) {
+                const pageCheckbox = document.getElementById('page' + i);
+                if (pageCheckbox) {
+                    pageCheckbox.checked = true;
+                }
+            }
+        }
+    }
+}
+</script>
+
 {% else %}
 <div class="col-md-6 offset-md-3">
     <h1>Login</h1>
@@ -70,5 +108,4 @@
     </form>
 </div>
 {% endif %}
-
 {% endblock %}
