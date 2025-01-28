@@ -81,7 +81,7 @@ def process_pages(request, file_id):
 
         # Debugging: Print the authentication status
         print("User authenticated:", request.user.is_authenticated)
-        print("User email:", request.user.username)  # Check if the email is being retrieved
+        print("User email:", request.user.email)  # Check if the email is being retrieved
 
         # Get the uploaded file and selected page groups
         uploaded_file = get_object_or_404(
@@ -90,7 +90,7 @@ def process_pages(request, file_id):
         selected_groups = request.POST.getlist(
             "selected_groups"
         )  # List of groups of selected pages, e.g., ["1-5", "1-3"]
-        sender_email = request.user.username  # Get email from the currently logged-in user
+        sender_email = request.user.email  # Get email from the currently logged-in user
         print("line 90 - sender_email:", sender_email)  # Debugging print
 
         if not selected_groups:
