@@ -18,6 +18,7 @@ from itertools import groupby
 from operator import attrgetter
 from django.contrib.auth.models import User
 
+
 def process(request, file_id):
     # Get the file from the database for the current user
     uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
@@ -81,7 +82,9 @@ def process_pages(request, file_id):
 
         # Debugging: Print the authentication status
         print("User authenticated:", request.user.is_authenticated)
-        print("User email:", request.user.email)  # Check if the email is being retrieved
+        print(
+            "User email:", request.user.email
+        )  # Check if the email is being retrieved
 
         # Get the uploaded file and selected page groups
         uploaded_file = get_object_or_404(
@@ -100,14 +103,18 @@ def process_pages(request, file_id):
             return JsonResponse({"error": "Sender email is required."}, status=400)
 
         # Read the original PDF
-        original_pdf_path = uploaded_file.file.path  # Assuming UploadedFile model has a `file` field
+        original_pdf_path = (
+            uploaded_file.file.path
+        )  # Assuming UploadedFile model has a `file` field
 
         # Define the directory for processed PDFs
         processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
         if not os.path.exists(processed_dir):
             os.makedirs(processed_dir)
 
-        webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+        webhook_url = (
+            "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+        )
 
         try:
             pdf_reader = PdfReader(original_pdf_path)
@@ -120,12 +127,18 @@ def process_pages(request, file_id):
                 try:
                     pages = parse_page_group(group)
                     for page_num in pages:
-                        pdf_writer.add_page(pdf_reader.pages[page_num - 1])  # Zero-indexed
+                        pdf_writer.add_page(
+                            pdf_reader.pages[page_num - 1]
+                        )  # Zero-indexed
                 except ValueError:
-                    return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
+                    return JsonResponse(
+                        {"error": f"Invalid page group: {group}"}, status=400
+                    )
 
                 # Save the new PDF
-                new_pdf_path = os.path.join(processed_dir, f"document_{group_index}.pdf")
+                new_pdf_path = os.path.join(
+                    processed_dir, f"document_{group_index}.pdf"
+                )
                 with open(new_pdf_path, "wb") as output_pdf:
                     pdf_writer.write(output_pdf)
 
@@ -140,7 +153,7 @@ def process_pages(request, file_id):
                         response = requests.post(
                             webhook_url,
                             files=files,
-                            data=data  # Send both file and sender_name in the body
+                            data=data,  # Send both file and sender_name in the body
                         )
 
                     # Check response from the webhook
@@ -152,7 +165,9 @@ def process_pages(request, file_id):
                             status=500,
                         )
                 except Exception as e:
-                    return JsonResponse({"error": f"Failed to send PDF {group_index}: {e}"}, status=500)
+                    return JsonResponse(
+                        {"error": f"Failed to send PDF {group_index}: {e}"}, status=500
+                    )
 
             messages.success(request, "All PDFs processed and sent successfully.")
             return redirect("home")
@@ -161,7 +176,6 @@ def process_pages(request, file_id):
             return JsonResponse({"error": f"Failed to process PDFs: {e}"}, status=500)
 
     return redirect("home")
-
 
 
 def parse_page_group(group):
@@ -182,26 +196,33 @@ def parse_page_group(group):
     return pages
 
 
-
 @login_required
 def processed_doc(request):
     """View to handle both new and processed documents for the logged-in user."""
     user = request.user
 
     # Fetch unprocessed files (files not linked to ProcessedImage)
-    unprocessed_files = UploadedFile.objects.filter(
-        user=user
-    ).exclude(id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)).order_by("-uploaded_at")
+    unprocessed_files = (
+        UploadedFile.objects.filter(user=user)
+        .exclude(
+            id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)
+        )
+        .order_by("-uploaded_at")
+    )
 
     # Fetch processed images grouped by UploadedFile
-    processed_images = ProcessedImage.objects.filter(
-        uploaded_file__user=user
-    ).select_related("uploaded_file").order_by("uploaded_file", "page_num")
+    processed_images = (
+        ProcessedImage.objects.filter(uploaded_file__user=user)
+        .select_related("uploaded_file")
+        .order_by("uploaded_file", "page_num")
+    )
 
     # Group processed images by uploaded_file
     grouped_processed_files = {
         uploaded_file: list(images)
-        for uploaded_file, images in groupby(processed_images, key=attrgetter("uploaded_file"))
+        for uploaded_file, images in groupby(
+            processed_images, key=attrgetter("uploaded_file")
+        )
     }
 
     return render(
@@ -216,29 +237,33 @@ def processed_doc(request):
 
 @csrf_exempt
 def upload_pdfs(request):
-    if request.method == 'POST':
-        sender_email = request.POST.get('sender_email_address')
-        files = request.FILES.getlist('files')
+    if request.method == "POST":
+        sender_email = request.POST.get("sender_email_address")
+        files = request.FILES.getlist("files")
 
         if not sender_email or not files:
-            return JsonResponse({'error': 'Email address and files are required.'}, status=400)
+            return JsonResponse(
+                {"error": "Email address and files are required."}, status=400
+            )
 
         # Check if the sender_email exists in the User model
         try:
             user = User.objects.get(email=sender_email)
         except User.DoesNotExist:
-            return JsonResponse({'error': 'Email address not associated with any user.'}, status=400)
+            return JsonResponse(
+                {"error": "Email address not associated with any user."}, status=400
+            )
 
         # Save each uploaded file associated with the user
         for file in files:
-            UploadedFile.objects.create(
-                file=file,
-                user=user
-            )
+            UploadedFile.objects.create(file=file, user=user)
 
-        return JsonResponse({
-            'message': 'Files uploaded successfully.',
-            'uploaded_files': [{'file_name': file.name} for file in files]
-        }, status=201)
+        return JsonResponse(
+            {
+                "message": "Files uploaded successfully.",
+                "uploaded_files": [{"file_name": file.name} for file in files],
+            },
+            status=201,
+        )
 
-    return JsonResponse({'error': 'Invalid request method.'}, status=405)
+    return JsonResponse({"error": "Invalid request method."}, status=405)

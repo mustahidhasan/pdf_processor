@@ -29,14 +29,17 @@ def home(request):
         # Handle File Upload
         if "uploaded_file" in request.FILES:
             uploaded_file = request.FILES["uploaded_file"]
-            
+
             # Check if the file is a PDF
             if uploaded_file.content_type == "application/pdf":
-                
+
                 # Check if the file size is less than or equal to 200 MB
                 MAX_SIZE = 200 * 1024 * 1024  # 200 MB in bytes
                 if uploaded_file.size > MAX_SIZE:
-                    messages.error(request, "The file is too large. Maximum size allowed is 200 MB.")
+                    messages.error(
+                        request,
+                        "The file is too large. Maximum size allowed is 200 MB.",
+                    )
                 else:
                     new_file = UploadedFile(
                         file=uploaded_file, user=request.user
@@ -47,7 +50,7 @@ def home(request):
                     )
             else:
                 messages.error(request, "Only PDF files are allowed!")
-            
+
             return redirect("home")
 
         # Handle File Deletion
