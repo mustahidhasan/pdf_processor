@@ -75,71 +75,112 @@ def process(request, file_id):
 @csrf_exempt
 def process_pages(request, file_id):
     if request.method == "POST":
-        # Get the uploaded file and selected pages
+        # Ensure the user is authenticated
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "User is not authenticated."}, status=401)
+
+        # Debugging: Print the authentication status
+        print("User authenticated:", request.user.is_authenticated)
+        print("User email:", request.user.username)  # Check if the email is being retrieved
+
+        # Get the uploaded file and selected page groups
         uploaded_file = get_object_or_404(
             UploadedFile, id=file_id
         )  # Assuming you have an UploadedFile model
-        selected_pages = request.POST.getlist(
-            "selected_pages"
-        )  # List of selected page numbers as strings
+        selected_groups = request.POST.getlist(
+            "selected_groups"
+        )  # List of groups of selected pages, e.g., ["1-5", "1-3"]
+        sender_email = request.user.username  # Get email from the currently logged-in user
+        print("line 90 - sender_email:", sender_email)  # Debugging print
 
-        if not selected_pages:
-            return JsonResponse({"error": "No pages selected."}, status=400)
+        if not selected_groups:
+            return JsonResponse({"error": "No page groups selected."}, status=400)
 
-        # Read the original PDF and extract the selected pages
-        original_pdf_path = (
-            uploaded_file.file.path
-        )  # Assuming UploadedFile model has a `file` field
+        if not sender_email:
+            return JsonResponse({"error": "Sender email is required."}, status=400)
 
-        # Define the directory and file path for the new PDF
-        new_pdf_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
-        new_pdf_path = os.path.join(new_pdf_dir, "new_file.pdf")
+        # Read the original PDF
+        original_pdf_path = uploaded_file.file.path  # Assuming UploadedFile model has a `file` field
 
-        # Ensure the directory exists
-        if not os.path.exists(new_pdf_dir):
-            os.makedirs(new_pdf_dir)
+        # Define the directory for processed PDFs
+        processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
+        if not os.path.exists(processed_dir):
+            os.makedirs(processed_dir)
+
+        webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
 
         try:
             pdf_reader = PdfReader(original_pdf_path)
-            pdf_writer = PdfWriter()
 
-            # Add selected pages to the new PDF
-            for page_num in selected_pages:
-                pdf_writer.add_page(
-                    pdf_reader.pages[int(page_num) - 1]
-                )  # Pages are zero-indexed
+            # Process each group of pages
+            for group_index, group in enumerate(selected_groups, start=1):
+                pdf_writer = PdfWriter()
 
-            # Save the new PDF
-            with open(new_pdf_path, "wb") as output_pdf:
-                pdf_writer.write(output_pdf)
-        except Exception as e:
-            return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
+                # Parse the page group (e.g., "1-5" or "1,3,5")
+                try:
+                    pages = parse_page_group(group)
+                    for page_num in pages:
+                        pdf_writer.add_page(pdf_reader.pages[page_num - 1])  # Zero-indexed
+                except ValueError:
+                    return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
 
-        # Send the new PDF to the webhook
-        webhook_url = (
-            "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
-        )
-        headers = {"sender_name": "info+yedaya@kabuta.biz"}
+                # Save the new PDF
+                new_pdf_path = os.path.join(processed_dir, f"document_{group_index}.pdf")
+                with open(new_pdf_path, "wb") as output_pdf:
+                    pdf_writer.write(output_pdf)
 
-        try:
-            with open(new_pdf_path, "rb") as new_pdf:
-                response = requests.post(
-                    webhook_url, headers=headers, files={"file": new_pdf}
-                )
+                # Send the new PDF to the webhook
+                try:
+                    print("line 129 - sender_email:", sender_email)  # Debugging print
+                    with open(new_pdf_path, "rb") as new_pdf:
+                        # Prepare the multipart form data for the request
+                        files = {"file": new_pdf}
+                        data = {"sender_name": sender_email}
 
-            # Check response from the webhook
-            if response.status_code == 200:
-                messages.success(request, "PDF processed and sent successfully.")
-                return redirect("home")
-            else:
-                messages.error(
-                    request, f"Webhook response: {response.status_code} {response.text}"
-                )
-                return redirect("home")
-        except Exception as e:
-            messages.error(request, f"Failed to send PDF: {e}")
+                        response = requests.post(
+                            webhook_url,
+                            files=files,
+                            data=data  # Send both file and sender_name in the body
+                        )
+
+                    # Check response from the webhook
+                    if response.status_code != 200:
+                        return JsonResponse(
+                            {
+                                "error": f"Failed to send PDF {group_index}: {response.status_code} {response.text}"
+                            },
+                            status=500,
+                        )
+                except Exception as e:
+                    return JsonResponse({"error": f"Failed to send PDF {group_index}: {e}"}, status=500)
+
+            messages.success(request, "All PDFs processed and sent successfully.")
             return redirect("home")
+
+        except Exception as e:
+            return JsonResponse({"error": f"Failed to process PDFs: {e}"}, status=500)
+
     return redirect("home")
+
+
+
+def parse_page_group(group):
+    """
+    Parse a page group string into a list of page numbers.
+    Examples:
+        "1-5" -> [1, 2, 3, 4, 5]
+        "1,3,5" -> [1, 3, 5]
+    """
+    pages = []
+    parts = group.split(",")  # Split by commas for multiple ranges/pages
+    for part in parts:
+        if "-" in part:  # Range of pages (e.g., "1-5")
+            start, end = map(int, part.split("-"))
+            pages.extend(range(start, end + 1))
+        else:  # Single page (e.g., "3")
+            pages.append(int(part))
+    return pages
+
 
 
 @login_required
