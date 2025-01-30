@@ -89,6 +89,8 @@ def process_pages(request, file_id):
             return JsonResponse({"error": "Sender email is required."}, status=400)
 
         original_pdf_path = uploaded_file.file.path
+
+        # Update the path to save processed PDFs within uploads/processed_img_pdf
         processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
         if not os.path.exists(processed_dir):
             os.makedirs(processed_dir)
@@ -107,14 +109,15 @@ def process_pages(request, file_id):
                 except ValueError:
                     return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
 
+            # Save the combined PDF in the new processed directory
             combined_pdf_path = os.path.join(processed_dir, f"processed_{file_id}_{request.user.id}.pdf")
             with open(combined_pdf_path, "wb") as output_pdf:
                 pdf_writer.write(output_pdf)
-
+            print("line 116", processed_dir)
             processed_pdf = ProcessedPDF.objects.create(
                 user=request.user,
                 uploaded_file=uploaded_file,
-                file_path=combined_pdf_path,
+                file_path=f"processed_img_pdf/processed_{file_id}_{request.user.id}.pdf",
             )
 
             try:
