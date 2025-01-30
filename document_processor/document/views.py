@@ -174,20 +174,8 @@ def processed_doc(request):
         .order_by("-uploaded_at")
     )
 
-    # Fetch processed images grouped by UploadedFile
-    processed_images = (
-        ProcessedImage.objects.filter(uploaded_file__user=user)
-        .select_related("uploaded_file")
-        .order_by("uploaded_file", "page_num")
-    )
-
     # Group processed images by uploaded_file
-    grouped_processed_files = {
-        uploaded_file: list(images)
-        for uploaded_file, images in groupby(
-            processed_images, key=attrgetter("uploaded_file")
-        )
-    }
+    grouped_processed_files = ProcessedPDF.objects.all()
 
     return render(
         request,
