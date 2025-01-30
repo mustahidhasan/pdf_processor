@@ -17,7 +17,8 @@ from user.models import UploadedFile
 from itertools import groupby
 from operator import attrgetter
 from django.contrib.auth.models import User
-
+import time
+import uuid
 
 def process(request, file_id):
     # Get the file from the database for the current user
@@ -73,6 +74,8 @@ def process(request, file_id):
     )
 
 
+
+
 @csrf_exempt
 def process_pages(request, file_id):
     if request.method == "POST":
@@ -109,15 +112,19 @@ def process_pages(request, file_id):
                 except ValueError:
                     return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
 
-            # Save the combined PDF in the new processed directory
-            combined_pdf_path = os.path.join(processed_dir, f"processed_{file_id}_{request.user.id}.pdf")
+            # Create a unique file name using UUID or timestamp
+            unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+            combined_pdf_path = os.path.join(processed_dir, unique_filename)
+
             with open(combined_pdf_path, "wb") as output_pdf:
                 pdf_writer.write(output_pdf)
-            print("line 116", processed_dir)
+            print("Processed PDF saved at:", combined_pdf_path)
+
+            # Create a record in the database with the new file path
             processed_pdf = ProcessedPDF.objects.create(
                 user=request.user,
                 uploaded_file=uploaded_file,
-                file_path=f"processed_img_pdf/processed_{file_id}_{request.user.id}.pdf",
+                file_path=f"processed_img_pdf/{unique_filename}",
             )
 
             try:
@@ -139,7 +146,6 @@ def process_pages(request, file_id):
             return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
 
     return redirect("home")
-
 
 def parse_page_group(group):
     pages = []
