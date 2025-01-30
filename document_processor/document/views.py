@@ -5,7 +5,7 @@ from user.models import UploadedFile
 from pdf2image import convert_from_path
 from django.contrib import messages
 from django.conf import settings
-from .models import ProcessedImage  # Import the ProcessedImage model
+from .models import ProcessedImage, ProcessedPDF  # Import the ProcessedImage model
 
 from PyPDF2 import PdfWriter, PdfReader
 from django.http import JsonResponse
@@ -17,7 +17,8 @@ from user.models import UploadedFile
 from itertools import groupby
 from operator import attrgetter
 from django.contrib.auth.models import User
-
+import time
+import uuid
 
 def process(request, file_id):
     # Get the file from the database for the current user
@@ -73,129 +74,92 @@ def process(request, file_id):
     )
 
 
+
+
 @csrf_exempt
 def process_pages(request, file_id):
     if request.method == "POST":
-        # Ensure the user is authenticated
         if not request.user.is_authenticated:
             return JsonResponse({"error": "User is not authenticated."}, status=401)
 
-        # Debugging: Print the authentication status
-        print("User authenticated:", request.user.is_authenticated)
-        print(
-            "User email:", request.user.email
-        )  # Check if the email is being retrieved
-
-        # Get the uploaded file and selected page groups
-        uploaded_file = get_object_or_404(
-            UploadedFile, id=file_id
-        )  # Assuming you have an UploadedFile model
-        selected_groups = request.POST.getlist(
-            "selected_groups"
-        )  # List of groups of selected pages, e.g., ["1-5", "1-3"]
-        sender_email = request.user.email  # Get email from the currently logged-in user
-        print("line 90 - sender_email:", sender_email)  # Debugging print
+        uploaded_file = get_object_or_404(UploadedFile, id=file_id)
+        selected_groups = request.POST.getlist("selected_groups")
+        sender_email = request.user.email
 
         if not selected_groups:
             return JsonResponse({"error": "No page groups selected."}, status=400)
-
         if not sender_email:
             return JsonResponse({"error": "Sender email is required."}, status=400)
 
-        # Read the original PDF
-        original_pdf_path = (
-            uploaded_file.file.path
-        )  # Assuming UploadedFile model has a `file` field
+        original_pdf_path = uploaded_file.file.path
 
-        # Define the directory for processed PDFs
+        # Update the path to save processed PDFs within uploads/processed_img_pdf
         processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
         if not os.path.exists(processed_dir):
             os.makedirs(processed_dir)
 
-        webhook_url = (
-            "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
-        )
+        webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
 
         try:
             pdf_reader = PdfReader(original_pdf_path)
+            pdf_writer = PdfWriter()
 
-            # Process each group of pages
-            for group_index, group in enumerate(selected_groups, start=1):
-                pdf_writer = PdfWriter()
-
-                # Parse the page group (e.g., "1-5" or "1,3,5")
+            for group in selected_groups:
                 try:
                     pages = parse_page_group(group)
                     for page_num in pages:
-                        pdf_writer.add_page(
-                            pdf_reader.pages[page_num - 1]
-                        )  # Zero-indexed
+                        pdf_writer.add_page(pdf_reader.pages[page_num - 1])
                 except ValueError:
-                    return JsonResponse(
-                        {"error": f"Invalid page group: {group}"}, status=400
-                    )
+                    return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
 
-                # Save the new PDF
-                new_pdf_path = os.path.join(
-                    processed_dir, f"document_{group_index}.pdf"
-                )
-                with open(new_pdf_path, "wb") as output_pdf:
-                    pdf_writer.write(output_pdf)
+            # Create a unique file name using UUID or timestamp
+            unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+            combined_pdf_path = os.path.join(processed_dir, unique_filename)
 
-                # Send the new PDF to the webhook
-                try:
-                    print("line 129 - sender_email:", sender_email)  # Debugging print
-                    with open(new_pdf_path, "rb") as new_pdf:
-                        # Prepare the multipart form data for the request
-                        files = {"file": new_pdf}
-                        data = {"sender_name": sender_email}
+            with open(combined_pdf_path, "wb") as output_pdf:
+                pdf_writer.write(output_pdf)
+            print("Processed PDF saved at:", combined_pdf_path)
 
-                        response = requests.post(
-                            webhook_url,
-                            files=files,
-                            data=data,  # Send both file and sender_name in the body
-                        )
+            # Create a record in the database with the new file path
+            processed_pdf = ProcessedPDF.objects.create(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                file_path=f"processed_img_pdf/{unique_filename}",
+            )
 
-                    # Check response from the webhook
-                    if response.status_code != 200:
-                        return JsonResponse(
-                            {
-                                "error": f"Failed to send PDF {group_index}: {response.status_code} {response.text}"
-                            },
-                            status=500,
-                        )
-                except Exception as e:
-                    return JsonResponse(
-                        {"error": f"Failed to send PDF {group_index}: {e}"}, status=500
-                    )
+            try:
+                with open(combined_pdf_path, "rb") as new_pdf:
+                    files = {"file": new_pdf}
+                    data = {"sender_name": sender_email}
 
-            messages.success(request, "All PDFs processed and sent successfully.")
+                    response = requests.post(webhook_url, files=files, data=data)
+
+                if response.status_code != 200:
+                    return JsonResponse({"error": f"Failed to send PDF: {response.status_code} {response.text}"}, status=500)
+            except Exception as e:
+                return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
+
+            messages.success(request, "PDF processed, saved, and sent successfully.")
             return redirect("home")
 
         except Exception as e:
-            return JsonResponse({"error": f"Failed to process PDFs: {e}"}, status=500)
+            return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
 
     return redirect("home")
 
-
 def parse_page_group(group):
-    """
-    Parse a page group string into a list of page numbers.
-    Examples:
-        "1-5" -> [1, 2, 3, 4, 5]
-        "1,3,5" -> [1, 3, 5]
-    """
     pages = []
-    parts = group.split(",")  # Split by commas for multiple ranges/pages
+    parts = group.split(",")
     for part in parts:
-        if "-" in part:  # Range of pages (e.g., "1-5")
+        if "-" in part:
             start, end = map(int, part.split("-"))
             pages.extend(range(start, end + 1))
-        else:  # Single page (e.g., "3")
+        else:
             pages.append(int(part))
     return pages
 
 
+# later will add
 @login_required
 def processed_doc(request):
     """View to handle both new and processed documents for the logged-in user."""
@@ -210,20 +174,8 @@ def processed_doc(request):
         .order_by("-uploaded_at")
     )
 
-    # Fetch processed images grouped by UploadedFile
-    processed_images = (
-        ProcessedImage.objects.filter(uploaded_file__user=user)
-        .select_related("uploaded_file")
-        .order_by("uploaded_file", "page_num")
-    )
-
     # Group processed images by uploaded_file
-    grouped_processed_files = {
-        uploaded_file: list(images)
-        for uploaded_file, images in groupby(
-            processed_images, key=attrgetter("uploaded_file")
-        )
-    }
+    grouped_processed_files = ProcessedPDF.objects.all()
 
     return render(
         request,

@@ -44,32 +44,34 @@
         <h2>Processed Documents</h2>
         <hr>
         {% if grouped_processed_files %}
-            {% for uploaded_file, images in grouped_processed_files.items %}
-                <div class="accordion" id="processedFilesAccordion">
+            <div class="accordion" id="processedFilesAccordion">
+                {% for processed_pdf in grouped_processed_files %}
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse-{{ forloop.counter }}">
-                                {{ uploaded_file.file.name }}
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="false" 
+                                    aria-controls="collapse-{{ forloop.counter }}">
+                                {{ processed_pdf.uploaded_file.file.name }} (Processed)
                             </button>
                         </h2>
-                        <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ forloop.counter }}" data-bs-parent="#processedFilesAccordion">
+                        <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse" 
+                            aria-labelledby="heading-{{ forloop.counter }}" data-bs-parent="#processedFilesAccordion">
                             <div class="accordion-body">
-                                <ul>
-                                    {% for image in images %}
-                                        <li>
-                                            Page {{ image.page_num }}: 
-                                            <img src="{{ image.image.url }}" alt="Processed Image" style="max-width: 200px;">
-                                        </li>
-                                    {% endfor %}
-                                </ul>
+                                <p><strong>Processed At:</strong> {{ processed_pdf.processed_at }}</p>
+                                <p>
+                                    <a href="{{ processed_pdf.file_path.url }}" target="_blank" class="btn btn-primary">
+                                        Download Processed PDF
+                                    </a>
+                                </p>
                             </div>
                         </div>
                     </div>
-                </div>
-            {% endfor %}
+                {% endfor %}
+            </div>
         {% else %}
             <p>No processed documents available.</p>
         {% endif %}
+
     </div>
 </div>
 

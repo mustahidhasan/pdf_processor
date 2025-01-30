@@ -37,7 +37,7 @@
                 <form method="POST" action="{% url 'process' file_id=file.id %}" style="display: inline;" class="m-1">
                     {% csrf_token %}
                     <input type="hidden" name="delete_file" value="{{ file.id }}">
-                    <button type="submit" class="btn btn-primary btn-sm ml-2">Process</button>
+                    <button type="submit" class="btn btn-info btn-sm ml-2">Split</button>
                 </form>
             </div>
         </li>
