@@ -75,6 +75,7 @@
             
             <!-- Container for buttons to align them inline -->
             <div class="d-flex">
+                <p style="display: inline;" class="m-1"><strong>Uploaded at:</strong> {{ file.file_created_at }}</p>
                 <!-- Delete Button -->
                 <form method="POST" action="{% url 'home' %}" style="display: inline;" class="m-1">
                     {% csrf_token %}

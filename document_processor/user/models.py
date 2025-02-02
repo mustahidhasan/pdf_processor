@@ -12,6 +12,8 @@ class UploadedFile(models.Model):
     user = models.ForeignKey(
         User, on_delete=models.CASCADE
     )  # Associate each file with a specific user
+    file_created_at = models.DateTimeField(auto_now=True)
+    is_archieved = models.BooleanField(default=False)
 
     def __str__(self):
         return self.file.name
