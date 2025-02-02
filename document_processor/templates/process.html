@@ -5,7 +5,7 @@
 <div class="container mt-4">
     <h4>Process PDF: {{ uploaded_file.file.name }}</h4>
 
-    <form method="POST" action="{% url 'process_pages' file_id=uploaded_file.id %}">
+    <form id="pdfProcessingForm" method="POST" action="{% url 'process_pages' file_id=uploaded_file.id %}">
         {% csrf_token %}
         
         <h3>Select Pages (You can select a range like 1 to 5 or individual pages)</h3>
@@ -60,7 +60,11 @@
                 </div>
             {% endfor %}
         </div>
-        
+
+        <!-- Success message -->
+        <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+            PDF processed successfully! Select another set of pages to process.
+        </div>
     </form>
 </div>
 
@@ -103,6 +107,37 @@ function sliceSelectedImages() {
         }
     });
 }
+
+// AJAX form submission to keep the page active after PDF processing
+document.getElementById('pdfProcessingForm').addEventListener('submit', function (event) {
+    event.preventDefault(); // Prevent page refresh
+
+    let formData = new FormData(this);
+    let actionUrl = this.action; // Get form action URL
+
+    fetch(actionUrl, {
+        method: "POST",
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'  // Ensure Django recognizes the AJAX request
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+        } else {
+            document.getElementById("successMessage").style.display = "block"; // Show success message
+
+            // Uncheck all checkboxes after processing
+            document.querySelectorAll('input[name="selected_groups"]').forEach(checkbox => checkbox.checked = false);
+            
+            // Clear the range input field
+            document.getElementById('page_range').value = "";
+        }
+    })
+    .catch(error => console.error("Error:", error));
+});
 </script>
 
 {% else %}

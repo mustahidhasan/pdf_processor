@@ -93,10 +93,9 @@ def process_pages(request, file_id):
 
         original_pdf_path = uploaded_file.file.path
 
-        # Update the path to save processed PDFs within uploads/processed_img_pdf
+        # Directory for processed PDFs
         processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
-        if not os.path.exists(processed_dir):
-            os.makedirs(processed_dir)
+        os.makedirs(processed_dir, exist_ok=True)
 
         webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
 
@@ -112,15 +111,14 @@ def process_pages(request, file_id):
                 except ValueError:
                     return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
 
-            # Create a unique file name using UUID or timestamp
+            # Create a unique filename
             unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
             combined_pdf_path = os.path.join(processed_dir, unique_filename)
 
             with open(combined_pdf_path, "wb") as output_pdf:
                 pdf_writer.write(output_pdf)
-            print("Processed PDF saved at:", combined_pdf_path)
 
-            # Create a record in the database with the new file path
+            # Save to database
             processed_pdf = ProcessedPDF.objects.create(
                 user=request.user,
                 uploaded_file=uploaded_file,
@@ -131,7 +129,6 @@ def process_pages(request, file_id):
                 with open(combined_pdf_path, "rb") as new_pdf:
                     files = {"file": new_pdf}
                     data = {"sender_name": sender_email}
-
                     response = requests.post(webhook_url, files=files, data=data)
 
                 if response.status_code != 200:
@@ -139,13 +136,16 @@ def process_pages(request, file_id):
             except Exception as e:
                 return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
 
-            messages.success(request, "PDF processed, saved, and sent successfully.")
-            return redirect("home")
+            return JsonResponse({
+                "message": "PDF processed successfully. You can select more pages.",
+                "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
+                "continue_selection": True  # Flag for frontend to allow more selections
+            })
 
         except Exception as e:
             return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
 
-    return redirect("home")
+    return JsonResponse({"error": "Invalid request method."}, status=400)
 
 def parse_page_group(group):
     pages = []
