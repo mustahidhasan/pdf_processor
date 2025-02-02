@@ -167,7 +167,7 @@ def processed_doc(request):
 
     # Fetch unprocessed files (files not linked to ProcessedImage)
     unprocessed_files = (
-        UploadedFile.objects.filter(user=user)
+        UploadedFile.objects.filter(user=user, is_archieved = False)
         .exclude(
             id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)
         )
