@@ -108,6 +108,9 @@
         // Select all Split forms using data attribute
         const splitForms = document.querySelectorAll("form[data-split='true']");
     
+        // Select all Delete forms
+        const deleteForms = document.querySelectorAll("form[action='{% url 'home' %}']");
+    
         // Function to show spinner
         function showSpinner(event) {
             loadingSpinner.style.display = "flex";
@@ -123,11 +126,17 @@
             form.addEventListener("submit", showSpinner);
         });
     
+        // Add event listeners to all Delete forms
+        deleteForms.forEach(form => {
+            form.addEventListener("submit", showSpinner);
+        });
+    
         // Ensure the spinner is hidden when the page loads
         window.onload = function () {
             loadingSpinner.style.display = "none";
         };
     });
+    
     </script>
     
 {% else %}
