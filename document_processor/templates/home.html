@@ -3,8 +3,56 @@
 {% block content %}
 
 {% if user.is_authenticated %}
+<style>
+    /* Full-screen overlay */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.2); /* Light semi-transparent background */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1050;
+    }
+    
+    /* Circular spinner container */
+    .loading-circle {
+        width: 120px;
+        height: 120px;
+        background: transparent; /* No background */
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 0 15px rgba(0, 13, 19, 0.5); /* Subtle blue glow */
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%); /* Centers it perfectly */
+    }
+    
+    /* Spinner inside the circle */
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        color: rgb(12, 54, 131) !important; /* Ensures spinner is blue */
+    }
+    
+    
+</style>
 <div class="container mt-2">
-
+    <!-- Spinner -->
+    <div id="loadingSpinner" class="loading-overlay" style="display: none;">
+        <div class="loading-circle">
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="sr-only"></span>
+            </div>
+            <p class="mt-3 text-light fw-bold"></p>
+        </div>
+    </div>
     <!-- File Upload Form -->
     <h2>Upload a File</h2>
     <form method="POST" enctype="multipart/form-data" action="{% url 'home' %}">
@@ -34,7 +82,7 @@
                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
                 <!-- Process Button with margin-left for spacing -->
-                <form method="POST" action="{% url 'process' file_id=file.id %}" style="display: inline;" class="m-1">
+                <form method="POST" action="{% url 'process' file_id=file.id %}" data-split="true" style="display: inline;" class="m-1">
                     {% csrf_token %}
                     <input type="hidden" name="delete_file" value="{{ file.id }}">
                     <button type="submit" class="btn btn-info btn-sm ml-2">Split</button>
@@ -47,7 +95,40 @@
     {% else %}
     <p>No files uploaded yet.</p>
     {% endif %}
+
 </div>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const loadingSpinner = document.getElementById("loadingSpinner");
+    
+        // Select the Upload form
+        const uploadForm = document.querySelector("form[action='{% url 'home' %}']");
+    
+        // Select all Split forms using data attribute
+        const splitForms = document.querySelectorAll("form[data-split='true']");
+    
+        // Function to show spinner
+        function showSpinner(event) {
+            loadingSpinner.style.display = "flex";
+        }
+    
+        // Add event listener to Upload form
+        if (uploadForm) {
+            uploadForm.addEventListener("submit", showSpinner);
+        }
+    
+        // Add event listeners to all Split forms
+        splitForms.forEach(form => {
+            form.addEventListener("submit", showSpinner);
+        });
+    
+        // Ensure the spinner is hidden when the page loads
+        window.onload = function () {
+            loadingSpinner.style.display = "none";
+        };
+    });
+    </script>
+    
 {% else %}
 <div class="col-md-6 offset-md-3">
     <h1>Login</h1>
