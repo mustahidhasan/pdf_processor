@@ -39,9 +39,8 @@
     height: 3rem;
     color: rgb(12, 54, 131) !important; /* Ensures spinner is blue */
 }
-
-
 </style>
+
 <div class="container mt-4">
     <!-- Success message -->
     <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
@@ -88,6 +87,24 @@
                             <div class="form-check">
                                 <input type="checkbox" name="selected_groups" value="{{ page.page_num }}" id="page{{ page.page_num }}" class="form-check-input">
                                 <label class="form-check-label" for="page{{ page.page_num }}">Select Page</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal for Image -->
+                <div class="modal fade" id="imageModal{{ page.page_num }}" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel{{ page.page_num }}" aria-hidden="true">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header d-flex justify-content-between align-items-center">
+                                <h5 class="modal-title" id="imageModalLabel{{ page.page_num }}">Page {{ page.page_num }}</h5>
+                                <button type="button" class="btn btn-danger close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+
+                            <div class="modal-body">
+                                <img src="/{{ page.image_url }}" class="img-fluid" alt="Page {{ page.page_num }}">
                             </div>
                         </div>
                     </div>
