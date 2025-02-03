@@ -62,6 +62,10 @@
                                     <a href="{{ processed_pdf.file_path.url }}" target="_blank" class="btn btn-primary">
                                         Download Processed PDF
                                     </a>
+                                    <form method="POST" action="{% url 'delete_document' processed_pdf.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                    </form>
                                 </p>
                             </div>
                         </div>

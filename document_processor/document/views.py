@@ -185,7 +185,23 @@ def processed_doc(request):
             "grouped_processed_files": grouped_processed_files,
         },
     )
+@login_required
+def delete_document(request, file_id):
 
+    if request.method == "POST":
+        print("line 192", file_id)
+        get_processed_file = ProcessedPDF.objects.filter(id=file_id).first()
+        if get_processed_file:
+            get_processed_file.delete()
+            messages.success(request, "Document deleted successfully.")
+            return redirect("processed_doc")  # Redirects to the home page
+        else:
+            # Handle the case where the file doesn't exist (e.g., raise a 404 or log the error)
+            print("Processed file not found.")
+            messages.error(request, "Document deleted Error.")
+            return redirect("processed_doc")  # Redirects to the home page
+
+    return redirect("processed_doc")
 
 @csrf_exempt
 def upload_pdfs(request):
