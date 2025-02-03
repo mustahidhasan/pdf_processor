@@ -16,6 +16,7 @@ class ProcessedImage(models.Model):
     def __str__(self):
         return f"Page {self.page_num}"
 
+
 class ProcessedPDF(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     uploaded_file = models.ForeignKey(UploadedFile, on_delete=models.CASCADE)
