@@ -10,7 +10,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2); /* Light semi-transparent background */
+    background: rgba(0, 0, 0, 0.2);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -21,40 +21,34 @@
 .loading-circle {
     width: 120px;
     height: 120px;
-    background: transparent; /* No background */
+    background: transparent;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    box-shadow: 0 0 15px rgba(0, 13, 19, 0.5); /* Subtle blue glow */
+    box-shadow: 0 0 15px rgba(0, 13, 19, 0.5);
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%); /* Centers it perfectly */
+    transform: translate(-50%, -50%);
 }
 
-/* Spinner inside the circle */
 .spinner-border {
     width: 3rem;
     height: 3rem;
-    color: rgb(12, 54, 131) !important; /* Ensures spinner is blue */
+    color: rgb(12, 54, 131) !important;
 }
 </style>
 
 <div class="container mt-4">
-    <!-- Success message -->
     <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
         PDF processed successfully! Select another set of pages to process.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
-    <!-- Spinner -->
     <div id="loadingSpinner" class="loading-overlay" style="display: none;">
         <div class="loading-circle">
-            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
-                <span class="sr-only"></span>
-            </div>
-            <p class="mt-3 text-light fw-bold"></p>
+            <div class="spinner-border text-light" role="status"></div>
         </div>
     </div>
 
@@ -63,48 +57,26 @@
     <form id="pdfProcessingForm" method="POST" action="{% url 'process_pages' file_id=uploaded_file.id %}">
         {% csrf_token %}
         
-        <h3>Select Pages (You can select a range like 1 to 5 or individual pages)</h3>
-        
+        <h3>Select Pages</h3>
         <div class="form-group">
-            <label for="page_range">Page Range (e.g., 1 to 5 or 1-5):</label>
-            <input type="text" class="form-control" id="page_range" name="page_range" placeholder="Enter range (e.g., 1 to 5)" oninput="selectPagesBasedOnRange()">
+            <label for="page_range">Page Range:</label>
+            <input type="text" class="form-control" id="page_range" name="page_range" placeholder="e.g., 1-5" oninput="selectPagesBasedOnRange()">
         </div>
 
         <div class="mt-3">
-            <!-- onclick="sliceSelectedImages()" -->
-            <button type="submit" class="btn btn-warning"  >Generate PDF</button>
+            <button type="submit" class="btn btn-warning">Generate PDF</button>
         </div>
 
-        <h3>Select Pages</h3>
         <div class="row" id="imageContainer">
             {% for page in extracted_pages %}
                 <div class="col-md-3 mb-4 page-card" id="pageCard{{ page.page_num }}">
                     <div class="card">
-                        <img src="/{{ page.image_url }}" class="card-img-top" alt="Page {{ page.page_num }}" style="width:100%; height: auto;" data-toggle="modal" data-target="#imageModal{{ page.page_num }}">
+                        <img src="/{{ page.image_url }}" class="card-img-top" alt="Page {{ page.page_num }}">
                         <div class="card-body">
                             <h5 class="card-title">Page {{ page.page_num }}</h5>
-                            <p class="card-text">Select this page for processing.</p>
                             <div class="form-check">
                                 <input type="checkbox" name="selected_groups" value="{{ page.page_num }}" id="page{{ page.page_num }}" class="form-check-input">
                                 <label class="form-check-label" for="page{{ page.page_num }}">Select Page</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Modal for Image -->
-                <div class="modal fade" id="imageModal{{ page.page_num }}" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel{{ page.page_num }}" aria-hidden="true">
-                    <div class="modal-dialog" role="document">
-                        <div class="modal-content">
-                            <div class="modal-header d-flex justify-content-between align-items-center">
-                                <h5 class="modal-title" id="imageModalLabel{{ page.page_num }}">Page {{ page.page_num }}</h5>
-                                <button type="button" class="btn btn-danger close" data-dismiss="modal" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-
-                            <div class="modal-body">
-                                <img src="/{{ page.image_url }}" class="img-fluid" alt="Page {{ page.page_num }}">
                             </div>
                         </div>
                     </div>
@@ -119,10 +91,10 @@ function selectPagesBasedOnRange() {
     const rangeInput = document.getElementById('page_range').value.trim();
     const checkboxes = document.querySelectorAll('input[name="selected_groups"]');
     checkboxes.forEach(checkbox => checkbox.checked = false);
-    const rangeMatch = rangeInput.match(/^(\d+)\s*(?:to|-)\s*(\d+)$/);
+    const rangeMatch = rangeInput.match(/^(\d+)\s*(?:to|-)?\s*(\d+)?$/);
     if (rangeMatch) {
         const start = parseInt(rangeMatch[1], 10);
-        const end = parseInt(rangeMatch[2], 10);
+        const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : start;
         if (start <= end) {
             for (let i = start; i <= end; i++) {
                 const pageCheckbox = document.getElementById('page' + i);
@@ -132,23 +104,11 @@ function selectPagesBasedOnRange() {
             }
         }
     }
-}
+};
 
-function sliceSelectedImages() {
-    const selectedCheckboxes = document.querySelectorAll('input[name="selected_groups"]:checked');
-    selectedCheckboxes.forEach(checkbox => {
-        const pageNum = checkbox.value;
-        const pageCard = document.getElementById('pageCard' + pageNum);
-        if (pageCard) {
-            pageCard.remove();
-        }
-    });
-}
-
-// AJAX form submission with spinner
 document.getElementById('pdfProcessingForm').addEventListener('submit', function (event) {
     event.preventDefault();
-    document.getElementById("loadingSpinner").style.display = "block"; // Show spinner
+    document.getElementById("loadingSpinner").style.display = "block";
     
     let formData = new FormData(this);
     let actionUrl = this.action;
@@ -160,17 +120,23 @@ document.getElementById('pdfProcessingForm').addEventListener('submit', function
     })
     .then(response => response.json())
     .then(data => {
-        document.getElementById("loadingSpinner").style.display = "none"; // Hide spinner
+        document.getElementById("loadingSpinner").style.display = "none";
         if (data.error) {
             alert("Error: " + data.error);
         } else {
             document.getElementById("successMessage").style.display = "block";
-            document.querySelectorAll('input[name="selected_groups"]').forEach(checkbox => checkbox.checked = false);
+            document.querySelectorAll('input[name="selected_groups"]:checked').forEach(checkbox => {
+                const pageNum = checkbox.value;
+                const pageCard = document.getElementById('pageCard' + pageNum);
+                if (pageCard) {
+                    pageCard.remove();
+                }
+            });
             document.getElementById('page_range').value = "";
         }
     })
     .catch(error => {
-        document.getElementById("loadingSpinner").style.display = "none"; // Hide spinner
+        document.getElementById("loadingSpinner").style.display = "none";
         console.error("Error:", error);
     });
 });
