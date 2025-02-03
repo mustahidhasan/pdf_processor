@@ -60,7 +60,7 @@ def home(request):
                 file_to_delete = UploadedFile.objects.get(
                     id=file_id, user=request.user
                 )  # Ensure the file belongs to the logged-in user
-                
+
                 file_to_delete.is_archieved = True
                 file_to_delete.save()
                 messages.success(
@@ -77,7 +77,7 @@ def home(request):
     if request.user.is_authenticated:
         uploaded_files = UploadedFile.objects.filter(
             user=request.user,
-            is_archieved = False,
+            is_archieved=False,
         )  # Fetch files only if user is logged in
         context = {
             "uploaded_files": uploaded_files,

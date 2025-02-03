@@ -20,6 +20,7 @@ from django.contrib.auth.models import User
 import time
 import uuid
 
+
 def process(request, file_id):
     # Get the file from the database for the current user
     uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
@@ -74,8 +75,6 @@ def process(request, file_id):
     )
 
 
-
-
 @csrf_exempt
 def process_pages(request, file_id):
     if request.method == "POST":
@@ -97,7 +96,9 @@ def process_pages(request, file_id):
         processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
         os.makedirs(processed_dir, exist_ok=True)
 
-        webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+        webhook_url = (
+            "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+        )
 
         try:
             pdf_reader = PdfReader(original_pdf_path)
@@ -109,10 +110,14 @@ def process_pages(request, file_id):
                     for page_num in pages:
                         pdf_writer.add_page(pdf_reader.pages[page_num - 1])
                 except ValueError:
-                    return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
+                    return JsonResponse(
+                        {"error": f"Invalid page group: {group}"}, status=400
+                    )
 
             # Create a unique filename
-            unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+            unique_filename = (
+                f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+            )
             combined_pdf_path = os.path.join(processed_dir, unique_filename)
 
             with open(combined_pdf_path, "wb") as output_pdf:
@@ -132,20 +137,28 @@ def process_pages(request, file_id):
                     response = requests.post(webhook_url, files=files, data=data)
 
                 if response.status_code != 200:
-                    return JsonResponse({"error": f"Failed to send PDF: {response.status_code} {response.text}"}, status=500)
+                    return JsonResponse(
+                        {
+                            "error": f"Failed to send PDF: {response.status_code} {response.text}"
+                        },
+                        status=500,
+                    )
             except Exception as e:
                 return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
 
-            return JsonResponse({
-                "message": "PDF processed successfully. You can select more pages.",
-                "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
-                "continue_selection": True  # Flag for frontend to allow more selections
-            })
+            return JsonResponse(
+                {
+                    "message": "PDF processed successfully. You can select more pages.",
+                    "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
+                    "continue_selection": True,  # Flag for frontend to allow more selections
+                }
+            )
 
         except Exception as e:
             return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=400)
+
 
 def parse_page_group(group):
     pages = []
@@ -167,7 +180,7 @@ def processed_doc(request):
 
     # Fetch unprocessed files (files not linked to ProcessedImage)
     unprocessed_files = (
-        UploadedFile.objects.filter(user=user, is_archieved = False)
+        UploadedFile.objects.filter(user=user, is_archieved=False)
         .exclude(
             id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)
         )
@@ -175,7 +188,7 @@ def processed_doc(request):
     )
 
     # Group processed images by uploaded_file
-    grouped_processed_files = ProcessedPDF.objects.all()
+    grouped_processed_files = ProcessedPDF.objects.all().order_by("-processed_at")
 
     return render(
         request,
@@ -185,6 +198,25 @@ def processed_doc(request):
             "grouped_processed_files": grouped_processed_files,
         },
     )
+
+
+@login_required
+def delete_document(request, file_id):
+
+    if request.method == "POST":
+        print("line 192", file_id)
+        get_processed_file = ProcessedPDF.objects.filter(id=file_id).first()
+        if get_processed_file:
+            get_processed_file.delete()
+            messages.success(request, "Document deleted successfully.")
+            return redirect("processed_doc")  # Redirects to the home page
+        else:
+            # Handle the case where the file doesn't exist (e.g., raise a 404 or log the error)
+            print("Processed file not found.")
+            messages.error(request, "Document deleted Error.")
+            return redirect("processed_doc")  # Redirects to the home page
+
+    return redirect("processed_doc")
 
 
 @csrf_exempt
