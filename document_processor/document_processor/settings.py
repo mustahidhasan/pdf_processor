@@ -23,6 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-61_9kog@l7f^1t)26j-vg&pa#7wgj69a_4c--6*^)fywzw5&22"
 
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -126,3 +127,8 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MEDIA_URL = "/media/"  # URL to access uploaded files
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",  # Default backend
+    "user.auth_backend.EmailOrUsernameBackend",  # Custom backend in the user app
+]
