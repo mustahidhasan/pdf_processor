@@ -23,7 +23,7 @@ def home(request):
         print("JWT Token received:", token)
         try:
             # Decode JWT token using SECRET_KEY from settings.py
-            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False}) # requires verify from aud
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False}) 
             print("Decoded payload:", payload)
 
             # Check if token has expired
@@ -40,7 +40,7 @@ def home(request):
             user_id = payload["user_id"]
 
             # Authenticate user using either email or username
-            user = authenticate(request, username=user_email, password=user_id)  # Authenticate using email as username # requires fix/check
+            user = authenticate(request, username=user_email, password=user_id) 
 
             if user:
                 login(request, user)
