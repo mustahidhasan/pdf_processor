@@ -11,9 +11,7 @@ from .forms import SignUpForm
 from django.core.exceptions import ValidationError
 import jwt
 import datetime
-
-SECRET_KEY = "django-insecure-61_9kog@l7f^1t)26j-vg&pa#7wgj69a_4c--6*^)fywzw5&22" # needs to fetch from seetings
-
+from document_processor.settings import SECRET_KEY
 
 def home(request):
     # Handle Login with JWT Token
