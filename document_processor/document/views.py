@@ -188,7 +188,9 @@ def processed_doc(request):
     )
 
     # Group processed files by uploaded_file and filter by user
-    grouped_processed_files = ProcessedPDF.objects.filter(user=user).order_by("-processed_at")
+    grouped_processed_files = ProcessedPDF.objects.filter(user=user).order_by(
+        "-processed_at"
+    )
 
     return render(
         request,

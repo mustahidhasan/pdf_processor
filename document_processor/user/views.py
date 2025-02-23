@@ -9,11 +9,59 @@ from django.conf import settings
 from .models import UploadedFile
 from .forms import SignUpForm
 from django.core.exceptions import ValidationError
+import jwt
+import datetime
+from document_processor.settings import SECRET_KEY
 
 
 def home(request):
+    # Handle Login with JWT Token
+    # Handle Login with JWT Token
+    if "token" in request.GET:
+        token = request.GET["token"]
+        print("JWT Token received:", token)
+        try:
+            # Decode JWT token using SECRET_KEY from settings.py
+            payload = jwt.decode(
+                token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False}
+            )
+            print("Decoded payload:", payload)
+
+            # Check if token has expired
+            exp = datetime.datetime.utcfromtimestamp(payload["exp"])
+            current_time = datetime.datetime.utcnow()
+            print(f"Token expiration time: {exp}")
+            print(f"Current time: {current_time}")
+
+            if exp < current_time:
+                messages.error(request, "Token has expired. Please log in again.")
+                return redirect("home")
+
+            user_email = payload["sub"]
+            user_id = payload["user_id"]
+
+            # Authenticate user using either email or username
+            user = authenticate(request, username=user_email, password=user_id)
+
+            if user:
+                login(request, user)
+                messages.success(request, "You have been logged in")
+                return redirect("home")
+            else:
+                messages.error(request, "User not found!")
+        except jwt.ExpiredSignatureError:
+            messages.error(request, "Token has expired. Please log in again.")
+            return redirect("home")
+        except jwt.InvalidTokenError:
+            messages.error(request, "Invalid token. Please try again.")
+            return redirect("home")
+        except jwt.InvalidAudienceError:
+            messages.error(request, "Invalid audience in token.")
+            return redirect("home")
+
     if request.method == "POST":
-        # Handle Login
+
+        # Handle traditional username and password login (if no JWT token is provided)
         if "username" in request.POST and "password" in request.POST:
             username = request.POST["username"]
             password = request.POST["password"]
@@ -60,7 +108,6 @@ def home(request):
                 file_to_delete = UploadedFile.objects.get(
                     id=file_id, user=request.user
                 )  # Ensure the file belongs to the logged-in user
-
                 file_to_delete.is_archieved = True
                 file_to_delete.save()
                 messages.success(
@@ -76,12 +123,9 @@ def home(request):
     # Conditionally add uploaded files to context if user is logged in
     if request.user.is_authenticated:
         uploaded_files = UploadedFile.objects.filter(
-            user=request.user,
-            is_archieved=False,
+            user=request.user, is_archieved=False
         )  # Fetch files only if user is logged in
-        context = {
-            "uploaded_files": uploaded_files,
-        }
+        context = {"uploaded_files": uploaded_files}
     else:
         context = {}  # No context for anonymous users
 
