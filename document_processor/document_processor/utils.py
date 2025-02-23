@@ -13,7 +13,7 @@ def generate_jwt(user_email, user_id):
     :return: JWT token
     """
     iat = datetime.datetime.utcnow()  # Issued at time
-    exp = iat + datetime.timedelta(days=1)  # Token expires in 1 hour
+    exp = iat + datetime.timedelta(hours=1)  # Token expires in 1 hour
     payload = {
         "sub": user_email,
         "iss": "comax",
@@ -29,5 +29,5 @@ def generate_jwt(user_email, user_id):
     return token
 
 
-if __name__ == "__main__":
-    generate_jwt("admin@gmail.com", "admin")
+# if __name__ == "__main__":
+#     generate_jwt("admin@gmail.com", "admin")
