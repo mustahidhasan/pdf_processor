@@ -74,9 +74,24 @@ def home(request):
             username = request.POST["username"]
             password = request.POST["password"]
             user = authenticate(request, username=username, password=password)
+            
             if user is not None:
                 login(request, user)
                 messages.success(request, "You have been logged in")
+
+                # **Generate JWT token and store email in payload**
+                payload = {
+                    "sub": user.email,  # Store email as the subject
+                    "user_id": user.id,
+                    "exp": (datetime.datetime.utcnow() + datetime.timedelta(hours=1)).timestamp(),
+                }
+                token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+                # Store token and payload in session
+                request.session["jwt_token"] = token
+                request.session["jwt_expiration"] = datetime.datetime.utcfromtimestamp(payload["exp"]).strftime("%Y-%m-%d %H:%M:%S")
+                request.session["jwt_payload"] = payload
+
                 return redirect("home")
             else:
                 messages.error(request, "Invalid login credentials. Please try again.")
