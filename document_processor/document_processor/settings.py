@@ -41,9 +41,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "user",
     "document",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -131,4 +133,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",  # Default backend
     "user.auth_backend.EmailOrUsernameBackend",  # Custom backend in the user app
+]
+CSRF_TRUSTED_ORIGINS = [
+    "https://splitter.kabuta.biz",
 ]
