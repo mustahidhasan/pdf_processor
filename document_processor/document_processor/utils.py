@@ -29,5 +29,5 @@ def generate_jwt(user_email, user_id):
     return token
 
 
-# if __name__ == "__main__":
-#     generate_jwt("admin@gmail.com", "admin")
+if __name__ == "__main__":
+    generate_jwt("admin@gmail.com", "admin")
