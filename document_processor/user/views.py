@@ -16,10 +16,10 @@ from document_processor.settings import SECRET_KEY
 
 def home(request):
     # Handle Login with JWT Token
-    # Handle Login with JWT Token
     if "token" in request.GET:
         token = request.GET["token"]
         print("JWT Token received:", token)
+
         try:
             # Decode JWT token using SECRET_KEY from settings.py
             payload = jwt.decode(
@@ -46,18 +46,26 @@ def home(request):
             if user:
                 login(request, user)
                 messages.success(request, "You have been logged in")
+
+                # **Store token and expiration time in session**
+                request.session["jwt_token"] = token
+                request.session["jwt_expiration"] = exp.strftime("%Y-%m-%d %H:%M:%S")
+                request.session["jwt_payload"] = (
+                    payload  # Store entire payload if needed
+                )
+
                 return redirect("home")
             else:
                 messages.error(request, "User not found!")
+
         except jwt.ExpiredSignatureError:
             messages.error(request, "Token has expired. Please log in again.")
-            return redirect("home")
         except jwt.InvalidTokenError:
             messages.error(request, "Invalid token. Please try again.")
-            return redirect("home")
         except jwt.InvalidAudienceError:
             messages.error(request, "Invalid audience in token.")
-            return redirect("home")
+
+        return redirect("home")
 
     if request.method == "POST":
 
@@ -66,9 +74,24 @@ def home(request):
             username = request.POST["username"]
             password = request.POST["password"]
             user = authenticate(request, username=username, password=password)
+            
             if user is not None:
                 login(request, user)
                 messages.success(request, "You have been logged in")
+
+                # **Generate JWT token and store email in payload**
+                payload = {
+                    "sub": user.email,  # Store email as the subject
+                    "user_id": user.id,
+                    "exp": (datetime.datetime.utcnow() + datetime.timedelta(hours=1)).timestamp(),
+                }
+                token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+                # Store token and payload in session
+                request.session["jwt_token"] = token
+                request.session["jwt_expiration"] = datetime.datetime.utcfromtimestamp(payload["exp"]).strftime("%Y-%m-%d %H:%M:%S")
+                request.session["jwt_payload"] = payload
+
                 return redirect("home")
             else:
                 messages.error(request, "Invalid login credentials. Please try again.")

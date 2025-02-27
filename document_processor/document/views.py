@@ -77,87 +77,110 @@ def process(request, file_id):
 
 @csrf_exempt
 def process_pages(request, file_id):
-    if request.method == "POST":
-        if not request.user.is_authenticated:
-            return JsonResponse({"error": "User is not authenticated."}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method."}, status=400)
 
-        uploaded_file = get_object_or_404(UploadedFile, id=file_id)
-        selected_groups = request.POST.getlist("selected_groups")
-        sender_email = request.user.email
+    # Retrieve JWT data from session
+    token = request.session.get("jwt_token")
+    payload = request.session.get("jwt_payload")
+    expiration = request.session.get("jwt_expiration")
 
-        if not selected_groups:
-            return JsonResponse({"error": "No page groups selected."}, status=400)
-        if not sender_email:
-            return JsonResponse({"error": "Sender email is required."}, status=400)
+    if not token or not payload:
+        messages.error(request, "No valid session found. Please log in again.")
+        return redirect("login")
 
-        original_pdf_path = uploaded_file.file.path
+    user_email = payload.get("sub")  # Extract email from JWT payload
+    if not user_email:
+        return JsonResponse(
+            {"error": "JWT payload missing 'sub' (user email)."}, status=400
+        )
 
-        # Directory for processed PDFs
-        processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
-        os.makedirs(processed_dir, exist_ok=True)
+    print(f"Token: {token}")
+    print(f"Payload: {payload}")
+    print(f"Expiration: {expiration}")
 
-        webhook_url = (
-            "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "User is not authenticated."}, status=401)
+
+    uploaded_file = get_object_or_404(UploadedFile, id=file_id)
+    selected_groups = request.POST.getlist("selected_groups")
+    sender_email = request.user.email
+
+    if not selected_groups:
+        return JsonResponse({"error": "No page groups selected."}, status=400)
+    if not sender_email:
+        return JsonResponse({"error": "Sender email is required."}, status=400)
+
+    original_pdf_path = uploaded_file.file.path
+
+    # Directory for processed PDFs
+    processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
+    os.makedirs(processed_dir, exist_ok=True)
+
+    webhook_url = (
+        "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+    )
+
+    try:
+        pdf_reader = PdfReader(original_pdf_path)
+        pdf_writer = PdfWriter()
+
+        for group in selected_groups:
+            try:
+                pages = parse_page_group(group)
+                for page_num in pages:
+                    pdf_writer.add_page(pdf_reader.pages[page_num - 1])
+            except ValueError:
+                return JsonResponse(
+                    {"error": f"Invalid page group: {group}"}, status=400
+                )
+
+        # Generate a unique filename
+        unique_filename = (
+            f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+        )
+        combined_pdf_path = os.path.join(processed_dir, unique_filename)
+
+        with open(combined_pdf_path, "wb") as output_pdf:
+            pdf_writer.write(output_pdf)
+
+        # Save processed PDF to database
+        processed_pdf = ProcessedPDF.objects.create(
+            user=request.user,
+            uploaded_file=uploaded_file,
+            file_path=f"processed_img_pdf/{unique_filename}",
         )
 
         try:
-            pdf_reader = PdfReader(original_pdf_path)
-            pdf_writer = PdfWriter()
-
-            for group in selected_groups:
-                try:
-                    pages = parse_page_group(group)
-                    for page_num in pages:
-                        pdf_writer.add_page(pdf_reader.pages[page_num - 1])
-                except ValueError:
-                    return JsonResponse(
-                        {"error": f"Invalid page group: {group}"}, status=400
-                    )
-
-            # Create a unique filename
-            unique_filename = (
-                f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
-            )
-            combined_pdf_path = os.path.join(processed_dir, unique_filename)
-
-            with open(combined_pdf_path, "wb") as output_pdf:
-                pdf_writer.write(output_pdf)
-
-            # Save to database
-            processed_pdf = ProcessedPDF.objects.create(
-                user=request.user,
-                uploaded_file=uploaded_file,
-                file_path=f"processed_img_pdf/{unique_filename}",
-            )
-
-            try:
-                with open(combined_pdf_path, "rb") as new_pdf:
-                    files = {"file": new_pdf}
-                    data = {"sender_name": sender_email}
-                    response = requests.post(webhook_url, files=files, data=data)
-
-                if response.status_code != 200:
-                    return JsonResponse(
-                        {
-                            "error": f"Failed to send PDF: {response.status_code} {response.text}"
-                        },
-                        status=500,
-                    )
-            except Exception as e:
-                return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
-
-            return JsonResponse(
-                {
-                    "message": "PDF processed successfully. You can select more pages.",
-                    "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
-                    "continue_selection": True,  # Flag for frontend to allow more selections
+            with open(combined_pdf_path, "rb") as new_pdf:
+                files = {"file": new_pdf}
+                data = {
+                    "sender_name": sender_email,
+                    "user_email": user_email,  # Add JWT email in webhook payload
                 }
-            )
+                response = requests.post(webhook_url, files=files, data=data)
+
+            if response.status_code != 200:
+                return JsonResponse(
+                    {
+                        "error": f"Failed to send PDF: {response.status_code} {response.text}"
+                    },
+                    status=500,
+                )
 
         except Exception as e:
-            return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
+            return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
 
-    return JsonResponse({"error": "Invalid request method."}, status=400)
+        return JsonResponse(
+            {
+                "message": "PDF processed successfully.",
+                "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
+                "continue_selection": True,  # Flag for frontend to allow more selections
+            }
+        )
+
+    except Exception as e:
+        return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
 
 
 def parse_page_group(group):
