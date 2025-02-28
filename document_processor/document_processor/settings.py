@@ -33,6 +33,7 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -42,7 +43,22 @@ INSTALLED_APPS = [
     "user",
     "document",
     "corsheaders",
+    
 ]
+
+JAZZMIN_SETTINGS = {
+    "site_title": "Document Processor Admin",
+    "site_header": "Document Processor",
+    "site_brand": "Document Processor",
+    "welcome_sign": "Welcome to Document Processor Admin",
+    "topmenu_links": [
+        {"name": "Home", "url": "/", "icon": "fa fa-home"},
+        {"name": "Logout", "url": "/logout", "icon": "fa fa-sign-out-alt"},
+    ],
+    "show_ui_builder": False,  # Set to True to enable the UI builder
+    "default_icon_parents": "fa fa-folder",
+    "default_icon_children": "fa fa-file",
+}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
