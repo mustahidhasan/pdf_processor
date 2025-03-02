@@ -14,6 +14,11 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'processed_doc' %}">Documents</a>
         </li>
+        {% if user.is_superuser %}
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'admin:index' %}">Admin</a>
+        </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link" href="{% url 'logout' %}">Logout</a>
         </li>
@@ -24,7 +29,6 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'home' %}">Login</a>
         </li>
-        
         {% endif %}
       </ul>
       <!-- This part aligns the 'Welcome' message to the right -->
