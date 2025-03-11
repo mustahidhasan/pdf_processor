@@ -12,7 +12,8 @@ from django.core.exceptions import ValidationError
 import jwt
 import datetime
 from document_processor.settings import SECRET_KEY
-
+from user.auth_backend import EmailOrUsernameBackend
+from django.contrib.auth.models import User
 
 def home(request):
     # Handle Login with JWT Token
@@ -30,29 +31,27 @@ def home(request):
             # Check if token has expired
             exp = datetime.datetime.utcfromtimestamp(payload["exp"])
             current_time = datetime.datetime.utcnow()
-            print(f"Token expiration time: {exp}")
-            print(f"Current time: {current_time}")
 
             if exp < current_time:
                 messages.error(request, "Token has expired. Please log in again.")
                 return redirect("home")
 
+            # Extract email (sub) from token payload
             user_email = payload["sub"]
-            user_id = payload["user_id"]
 
-            # Authenticate user using either email or username
-            user = authenticate(request, username=user_email, password=user_id)
-
+            # Try to find the user based on the email provided in the token
+            user = EmailOrUsernameBackend.authenticate(self=None, request=None, username=user_email)
+            print("user", user)
             if user:
+                # Manually set the backend for the user
+                user.backend = "user.auth_backend.EmailOrUsernameBackend"
                 login(request, user)
-                messages.success(request, "You have been logged in")
+                messages.success(request, "You have been logged in with token!")
 
-                # **Store token and expiration time in session**
+                # Store token and expiration time in session
                 request.session["jwt_token"] = token
                 request.session["jwt_expiration"] = exp.strftime("%Y-%m-%d %H:%M:%S")
-                request.session["jwt_payload"] = (
-                    payload  # Store entire payload if needed
-                )
+                request.session["jwt_payload"] = payload
 
                 return redirect("home")
             else:
@@ -64,9 +63,11 @@ def home(request):
             messages.error(request, "Invalid token. Please try again.")
         except jwt.InvalidAudienceError:
             messages.error(request, "Invalid audience in token.")
+        except Exception as e:
+            messages.error(request, f"Error processing token: {str(e)}")
 
         return redirect("home")
-
+    
     if request.method == "POST":
 
         # Handle traditional username and password login (if no JWT token is provided)
