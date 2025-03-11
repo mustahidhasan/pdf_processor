@@ -30,4 +30,4 @@ def generate_jwt(user_email, user_id):
 
 
 if __name__ == "__main__":
-    generate_jwt("admin@gmail.com", "admin")
+    generate_jwt("yedaya@kabuta.biz", "Yedaya")
