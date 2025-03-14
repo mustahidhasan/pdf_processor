@@ -151,14 +151,17 @@ def process_pages(request, file_id):
             file_path=f"processed_img_pdf/{unique_filename}",
         )
 
+        # Prepare the headers to include sender_name and user_email
+        headers = {
+            "sender_name": sender_email,
+        }
+
         try:
             with open(combined_pdf_path, "rb") as new_pdf:
                 files = {"file": new_pdf}
-                data = {
-                    "sender_name": sender_email,
-                    "user_email": user_email,  # Add JWT email in webhook payload
-                }
-                response = requests.post(webhook_url, files=files, data=data)
+                
+                print("line 161", headers)
+                response = requests.post(webhook_url, headers=headers, files=files)
 
             if response.status_code != 200:
                 return JsonResponse(
@@ -170,6 +173,7 @@ def process_pages(request, file_id):
 
         except Exception as e:
             return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
+
 
         return JsonResponse(
             {
