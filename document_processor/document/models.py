@@ -8,13 +8,13 @@ class ProcessedImage(models.Model):
         UploadedFile, related_name="processed_images", on_delete=models.CASCADE
     )
     page_num = models.PositiveIntegerField()
-    image = models.ImageField(
-        upload_to="processed_files/"
-    )  # Save images in the 'processed_files' directory under MEDIA_ROOT
+    image = models.ImageField(upload_to="processed_files/")
+    is_split = models.BooleanField(default=False)  # ✅ New field to track if page is split
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Page {self.page_num}"
+        return f"Page {self.page_num} - {'Split' if self.is_split else 'Unsplit'}"
+
 
 
 class ProcessedPDF(models.Model):
