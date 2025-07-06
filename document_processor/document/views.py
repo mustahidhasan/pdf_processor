@@ -66,6 +66,25 @@ def process_pages(request, file_id):
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
+    # Retrieve JWT data from session
+    token = request.session.get("jwt_token")
+    payload = request.session.get("jwt_payload")
+    expiration = request.session.get("jwt_expiration")
+
+    if not token or not payload:
+        messages.error(request, "No valid session found. Please log in again.")
+        return redirect("login")
+
+    user_email = payload.get("sub")  # Extract email from JWT payload
+    if not user_email:
+        return JsonResponse(
+            {"error": "JWT payload missing 'sub' (user email)."}, status=400
+        )
+
+    print(f"Token: {token}")
+    print(f"Payload: {payload}")
+    print(f"Expiration: {expiration}")
+
     if not request.user.is_authenticated:
         return JsonResponse({"error": "User is not authenticated."}, status=401)
 
@@ -79,10 +98,14 @@ def process_pages(request, file_id):
         return JsonResponse({"error": "Sender email is required."}, status=400)
 
     original_pdf_path = uploaded_file.file.path
+
+    # Directory for processed PDFs
     processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
     os.makedirs(processed_dir, exist_ok=True)
 
-    webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+    webhook_url = (
+        "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+    )
 
     try:
         pdf_reader = PdfReader(original_pdf_path)
@@ -94,57 +117,64 @@ def process_pages(request, file_id):
                 for page_num in pages:
                     pdf_writer.add_page(pdf_reader.pages[page_num - 1])
             except ValueError:
-                return JsonResponse({"error": f"Invalid page group: {group}"}, status=400)
+                return JsonResponse(
+                    {"error": f"Invalid page group: {group}"}, status=400
+                )
 
-        unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+        # Generate a unique filename
+        unique_filename = (
+            f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+        )
         combined_pdf_path = os.path.join(processed_dir, unique_filename)
 
         with open(combined_pdf_path, "wb") as output_pdf:
             pdf_writer.write(output_pdf)
 
-        # Save processed PDF record
+        # Save processed PDF to database
         processed_pdf = ProcessedPDF.objects.create(
             user=request.user,
             uploaded_file=uploaded_file,
             file_path=f"processed_img_pdf/{unique_filename}",
         )
 
-        # Mark pages as split immediately (commit split status regardless of webhook success)
+        # Mark pages as split
         for group in selected_groups:
             pages = parse_page_group(group)
             ProcessedImage.objects.filter(uploaded_file=uploaded_file, page_num__in=pages).update(is_split=True)
 
-        total_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file).count()
-        split_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file, is_split=True).count()
-        fully_split = (total_pages == split_pages)
+        # Prepare the headers to include sender_name and user_email
+        headers = {
+            "sender_name": sender_email,
+        }
 
-        # Attempt to send to webhook, but do NOT fail entire request on webhook failure
-        webhook_error = None
-        headers = {"sender_name": sender_email}
         try:
             with open(combined_pdf_path, "rb") as new_pdf:
                 files = {"file": new_pdf}
+                
+                print("line 161", headers)
                 response = requests.post(webhook_url, headers=headers, files=files)
+
             if response.status_code != 200:
-                webhook_error = f"Failed to send PDF: {response.status_code} {response.text}"
+                return JsonResponse(
+                    {
+                        "error": f"Failed to send PDF: {response.status_code} {response.text}"
+                    },
+                    status=500,
+                )
+
         except Exception as e:
-            webhook_error = f"Failed to send PDF: {e}"
+            return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
 
-        # Return success response regardless of webhook result, but include webhook error if any
-        response_data = {
-            "message": "PDF processed successfully.",
-            "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
-            "continue_selection": not fully_split,
-            "fully_split": fully_split,
-        }
-        if webhook_error:
-            response_data["webhook_error"] = webhook_error
-
-        return JsonResponse(response_data)
+        return JsonResponse(
+            {
+                "message": "PDF processed successfully.",
+                "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
+                "continue_selection": True,
+            }
+        )
 
     except Exception as e:
         return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
-
 
 def parse_page_group(group):
     pages = []
