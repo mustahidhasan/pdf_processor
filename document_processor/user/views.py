@@ -14,6 +14,7 @@ import datetime
 from document_processor.settings import SECRET_KEY
 from user.auth_backend import EmailOrUsernameBackend
 from django.contrib.auth.models import User
+from django.db.models import Count, Q
 
 def home(request):
     # Handle Login with JWT Token
@@ -144,11 +145,14 @@ def home(request):
                 )
             return redirect("home")
 
-    # Conditionally add uploaded files to context if user is logged in
     if request.user.is_authenticated:
-        uploaded_files = UploadedFile.objects.filter(
-            user=request.user, is_archieved=False
-        )  # Fetch files only if user is logged in
+        uploaded_files = UploadedFile.objects.filter(user=request.user, is_archieved=False).annotate(
+            total_pages=Count("processed_images"),
+            unsplit_pages=Count("processed_images", filter=Q(processed_images__is_split=False))
+        ).filter(
+            Q(total_pages=0) | Q(unsplit_pages__gt=0)
+        )
+
         context = {"uploaded_files": uploaded_files}
     else:
         context = {}  # No context for anonymous users
