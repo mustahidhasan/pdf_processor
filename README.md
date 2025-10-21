@@ -9,3 +9,4 @@ Processes the pdf and move forward to other site
 - `python manage.py migrate`
 - `python manage.py createsuperuser` (for the admin set up) 
 - `python manage.py runserver`
+- 
