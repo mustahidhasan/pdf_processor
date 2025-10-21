@@ -99,7 +99,7 @@ WSGI_APPLICATION = "document_processor.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django_mssql_backend",
+        "ENGINE": "mssql",
         "NAME": os.getenv("AZURE_DB_NAME"),
         "USER": os.getenv("AZURE_DB_USER"),
         "PASSWORD": os.getenv("AZURE_DB_PASSWORD"),
@@ -112,7 +112,6 @@ DATABASES = {
         },
     }
 }
-
 
 
 # Password validation
