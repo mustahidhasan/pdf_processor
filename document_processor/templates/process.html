@@ -83,7 +83,7 @@
             {% for page in extracted_pages %}
                 <div class="col-md-3 mb-4 page-card {% if page.is_split %}page-split{% endif %}" id="pageCard{{ page.page_num }}">
                     <div class="card">
-                        <img src="{{ page.image.url }}" class="card-img-top" alt="Page {{ page.page_num }}" style="width:100%; height: auto;" data-toggle="modal" data-target="#imageModal{{ page.page_num }}">
+                        <img src="{{ page.image_url }}" class="card-img-top" alt="Page {{ page.page_num }}" style="width:100%; height: auto;" data-toggle="modal" data-target="#imageModal{{ page.page_num }}">
                         <div class="card-body">
                             <h5 class="card-title">Page {{ page.page_num }}</h5>
 
@@ -110,7 +110,7 @@
                                 </button>
                             </div>
                             <div class="modal-body">
-                                <img src="{{ page.image.url }}" class="img-fluid" alt="Page {{ page.page_num }}">
+                                <img src="{{ page.image_url }}" class="img-fluid" alt="Page {{ page.page_num }}">
                             </div>
                         </div>
                     </div>
