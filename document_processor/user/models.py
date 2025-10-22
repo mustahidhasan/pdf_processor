@@ -1,7 +1,7 @@
 # user/models.py
 from django.db import models
 from django.contrib.auth.models import User
-from user.storages_backends import AzureMediaStorage
+from document_processor.storages_backends import AzureMediaStorage
 
 class UploadedFile(models.Model):
     file = models.FileField(

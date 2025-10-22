@@ -1,64 +1,61 @@
-import os
+import io
+import uuid
 import requests
 from django.shortcuts import render, get_object_or_404, redirect
-from user.models import UploadedFile
-from pdf2image import convert_from_path
 from django.contrib import messages
-from django.conf import settings
-from .models import ProcessedImage, ProcessedPDF
-
-from PyPDF2 import PdfWriter, PdfReader
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
 from django.contrib.auth.decorators import login_required
-from user.models import UploadedFile
-from itertools import groupby
-from operator import attrgetter
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from PyPDF2 import PdfReader, PdfWriter
+from pdf2image import convert_from_bytes
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.contrib.auth.models import User
-import time
-import uuid
+
+from user.models import UploadedFile
+from .models import ProcessedImage, ProcessedPDF
 
 
 def process(request, file_id):
     uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
 
-    file_path = uploaded_file.file.path
-    image_dir = os.path.join(settings.MEDIA_ROOT, "processed_files", str(uploaded_file.id))
-    os.makedirs(image_dir, exist_ok=True)
+    # Read PDF bytes from Azure
+    with default_storage.open(uploaded_file.file.name, "rb") as f:
+        pdf_bytes = f.read()
 
     processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
     if not processed_pages.exists():
         try:
-            images = convert_from_path(file_path, 300)
+            # Convert PDF to images in-memory
+            images = convert_from_bytes(pdf_bytes, 300)
             for page_num, image in enumerate(images):
-                image_filename = f"page_{page_num + 1}.png"
-                image_path = os.path.join(image_dir, image_filename)
-                image.save(image_path, "PNG")
-
+                img_io = io.BytesIO()
+                image.save(img_io, "PNG")
+                img_content = ContentFile(
+                    img_io.getvalue(),
+                    name=f"processed_files/{uploaded_file.id}/page_{page_num + 1}.png",
+                )
                 ProcessedImage.objects.create(
                     uploaded_file=uploaded_file,
                     page_num=page_num + 1,
-                    image=f"processed_files/{uploaded_file.id}/{image_filename}",
-                    is_split=False
+                    image=img_content,
+                    is_split=False,
                 )
             processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
         except Exception as e:
             messages.error(request, f"Error processing PDF: {str(e)}")
             return redirect("home")
 
-    extracted_pages = []
-    for page in processed_pages:
-        extracted_pages.append({
-            "page_num": page.page_num,
-            "image_url": os.path.join("media", page.image.name),
-            "is_split": page.is_split,
-        })
+    extracted_pages = [
+        {"page_num": page.page_num, "image_url": page.image.url, "is_split": page.is_split}
+        for page in processed_pages
+    ]
 
-    return render(request, "process.html", {
-        "uploaded_file": uploaded_file,
-        "extracted_pages": extracted_pages,
-    })
+    return render(
+        request,
+        "process.html",
+        {"uploaded_file": uploaded_file, "extracted_pages": extracted_pages},
+    )
 
 
 @csrf_exempt
@@ -66,7 +63,6 @@ def process_pages(request, file_id):
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
-    # Retrieve JWT data from session
     token = request.session.get("jwt_token")
     payload = request.session.get("jwt_payload")
     expiration = request.session.get("jwt_expiration")
@@ -75,15 +71,9 @@ def process_pages(request, file_id):
         messages.error(request, "No valid session found. Please log in again.")
         return redirect("login")
 
-    user_email = payload.get("sub")  # Extract email from JWT payload
+    user_email = payload.get("sub")
     if not user_email:
-        return JsonResponse(
-            {"error": "JWT payload missing 'sub' (user email)."}, status=400
-        )
-
-    print(f"Token: {token}")
-    print(f"Payload: {payload}")
-    print(f"Expiration: {expiration}")
+        return JsonResponse({"error": "JWT payload missing 'sub' (user email)."}, status=400)
 
     if not request.user.is_authenticated:
         return JsonResponse({"error": "User is not authenticated."}, status=401)
@@ -97,84 +87,58 @@ def process_pages(request, file_id):
     if not sender_email:
         return JsonResponse({"error": "Sender email is required."}, status=400)
 
-    original_pdf_path = uploaded_file.file.path
-
-    # Directory for processed PDFs
-    processed_dir = os.path.join(settings.MEDIA_ROOT, "processed_img_pdf")
-    os.makedirs(processed_dir, exist_ok=True)
-
-    webhook_url = (
-        "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
-    )
-
-    try:
-        pdf_reader = PdfReader(original_pdf_path)
+    # Read original PDF from Azure
+    with default_storage.open(uploaded_file.file.name, "rb") as f:
+        pdf_bytes = f.read()
+        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
         pdf_writer = PdfWriter()
 
         for group in selected_groups:
-            try:
-                pages = parse_page_group(group)
-                for page_num in pages:
-                    pdf_writer.add_page(pdf_reader.pages[page_num - 1])
-            except ValueError:
-                return JsonResponse(
-                    {"error": f"Invalid page group: {group}"}, status=400
-                )
+            pages = parse_page_group(group)
+            for page_num in pages:
+                pdf_writer.add_page(pdf_reader.pages[page_num - 1])
 
-        # Generate a unique filename
-        unique_filename = (
-            f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
-        )
-        combined_pdf_path = os.path.join(processed_dir, unique_filename)
+        # Save processed PDF directly to Azure
+        pdf_io = io.BytesIO()
+        pdf_writer.write(pdf_io)
+        unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
+        pdf_content = ContentFile(pdf_io.getvalue(), name=f"processed_img_pdf/{unique_filename}")
 
-        with open(combined_pdf_path, "wb") as output_pdf:
-            pdf_writer.write(output_pdf)
-
-        # Save processed PDF to database
         processed_pdf = ProcessedPDF.objects.create(
             user=request.user,
             uploaded_file=uploaded_file,
-            file_path=f"processed_img_pdf/{unique_filename}",
+            file_path=pdf_content,
         )
 
-        # Mark pages as split
-        for group in selected_groups:
-            pages = parse_page_group(group)
-            ProcessedImage.objects.filter(uploaded_file=uploaded_file, page_num__in=pages).update(is_split=True)
+    # Mark pages as split
+    for group in selected_groups:
+        pages = parse_page_group(group)
+        ProcessedImage.objects.filter(uploaded_file=uploaded_file, page_num__in=pages).update(is_split=True)
 
-        # Prepare the headers to include sender_name and user_email
-        headers = {
-            "sender_name": sender_email,
-        }
+    # Send PDF via webhook
+    webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+    try:
+        with processed_pdf.file_path.open("rb") as f:
+            files = {"file": f}
+            headers = {"sender_name": sender_email}
+            response = requests.post(webhook_url, headers=headers, files=files)
 
-        try:
-            with open(combined_pdf_path, "rb") as new_pdf:
-                files = {"file": new_pdf}
-                
-                print("line 161", headers)
-                response = requests.post(webhook_url, headers=headers, files=files)
-
-            if response.status_code != 200:
-                return JsonResponse(
-                    {
-                        "error": f"Failed to send PDF: {response.status_code} {response.text}"
-                    },
-                    status=500,
-                )
-
-        except Exception as e:
-            return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
-
-        return JsonResponse(
-            {
-                "message": "PDF processed successfully.",
-                "processed_pdf_url": f"/media/processed_img_pdf/{unique_filename}",
-                "continue_selection": True,
-            }
-        )
-
+        if response.status_code != 200:
+            return JsonResponse(
+                {"error": f"Failed to send PDF: {response.status_code} {response.text}"},
+                status=500,
+            )
     except Exception as e:
-        return JsonResponse({"error": f"Failed to process PDF: {e}"}, status=500)
+        return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
+
+    return JsonResponse(
+        {
+            "message": "PDF processed successfully.",
+            "processed_pdf_url": processed_pdf.file_path.url,
+            "continue_selection": True,
+        }
+    )
+
 
 def parse_page_group(group):
     pages = []
@@ -188,25 +152,17 @@ def parse_page_group(group):
     return pages
 
 
-# later will add
 @login_required
 def processed_doc(request):
-    """View to handle both new and processed documents for the logged-in user."""
     user = request.user
 
-    # Fetch unprocessed files (files not linked to ProcessedImage)
-    unprocessed_files = (
-        UploadedFile.objects.filter(user=user, is_archieved=False)
-        .exclude(
-            id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)
-        )
-        .order_by("-uploaded_at")
-    )
+    # Unprocessed files
+    unprocessed_files = UploadedFile.objects.filter(user=user, is_archieved=False).exclude(
+        id__in=ProcessedImage.objects.values_list("uploaded_file_id", flat=True)
+    ).order_by("-uploaded_at")
 
-    # Group processed files by uploaded_file and filter by user
-    grouped_processed_files = ProcessedPDF.objects.filter(user=user).order_by(
-        "-processed_at"
-    )
+    # Processed PDFs
+    grouped_processed_files = ProcessedPDF.objects.filter(user=user).order_by("-processed_at")
 
     return render(
         request,
@@ -220,20 +176,17 @@ def processed_doc(request):
 
 @login_required
 def delete_document(request, file_id):
-
     if request.method == "POST":
-        print("line 192", file_id)
-        get_processed_file = ProcessedPDF.objects.filter(id=file_id).first()
-        if get_processed_file:
-            get_processed_file.delete()
+        processed_file = ProcessedPDF.objects.filter(id=file_id).first()
+        if processed_file:
+            if processed_file.file_path:
+                file_name = processed_file.file_path.name
+                processed_file.file_path.delete(save=False)
+                print(f"🗑️ Deleted processed PDF from Azure: {file_name}")
+            processed_file.delete()
             messages.success(request, "Document deleted successfully.")
-            return redirect("processed_doc")  # Redirects to the home page
         else:
-            # Handle the case where the file doesn't exist (e.g., raise a 404 or log the error)
-            print("Processed file not found.")
-            messages.error(request, "Document deleted Error.")
-            return redirect("processed_doc")  # Redirects to the home page
-
+            messages.error(request, "Document not found.")
     return redirect("processed_doc")
 
 
@@ -244,19 +197,13 @@ def upload_pdfs(request):
         files = request.FILES.getlist("files")
 
         if not sender_email or not files:
-            return JsonResponse(
-                {"error": "Email address and files are required."}, status=400
-            )
+            return JsonResponse({"error": "Email address and files are required."}, status=400)
 
-        # Check if the sender_email exists in the User model
         try:
             user = User.objects.get(email=sender_email)
         except User.DoesNotExist:
-            return JsonResponse(
-                {"error": "Email address not associated with any user."}, status=400
-            )
+            return JsonResponse({"error": "Email not associated with any user."}, status=400)
 
-        # Save each uploaded file associated with the user
         for file in files:
             UploadedFile.objects.create(file=file, user=user)
 
