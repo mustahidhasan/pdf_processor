@@ -12,10 +12,11 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+from azure.storage.blob import BlobServiceClient
+from storages.backends.azure_storage import AzureStorage
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -43,7 +44,7 @@ INSTALLED_APPS = [
     "user",
     "document",
     "corsheaders",
-    
+    "storages",  # For Azure Blob storage
 ]
 
 JAZZMIN_SETTINGS = {
@@ -143,13 +144,43 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-MEDIA_URL = "/media/"  # URL to access uploaded files
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
+# Authentication
 AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",  # Default backend
-    "user.auth_backend.EmailOrUsernameBackend",  # Custom backend in the user app
+    "django.contrib.auth.backends.ModelBackend",
+    "user.auth_backend.EmailOrUsernameBackend",
 ]
-CSRF_TRUSTED_ORIGINS = [
-    "https://splitter.kabuta.biz",
-]
+
+CSRF_TRUSTED_ORIGINS = ["https://splitter.kabuta.biz"]
+
+# -----------------------------
+# Azure Blob Storage Settings
+# -----------------------------
+AZURE_STORAGE_ACCOUNT_NAME = "splitterstorage"
+AZURE_STORAGE_ACCOUNT_KEY = "UiI3HzkXvAud0u/JzCn+CsLa24zNfcyM9xlqAvt7X2bhM1aa6OpVBXxgtc4qgRvbznnlBloLpM+J+ASt3LxSOA=="
+AZURE_BLOB_CONTAINER_NAME = "comax-images-db"
+AZURE_BLOB_CONNECTION_STRING = (
+    "DefaultEndpointsProtocol=https;"
+    f"AccountName={AZURE_STORAGE_ACCOUNT_NAME};"
+    f"AccountKey={AZURE_STORAGE_ACCOUNT_KEY};"
+    "EndpointSuffix=core.windows.net"
+)
+
+DEFAULT_FILE_STORAGE = "document_processor.settings.AzureMediaStorage"
+
+# -----------------------------
+# Custom Azure Storage Backend
+# -----------------------------
+class AzureMediaStorage(AzureStorage):
+    account_name = AZURE_STORAGE_ACCOUNT_NAME
+    account_key = AZURE_STORAGE_ACCOUNT_KEY
+    azure_container = AZURE_BLOB_CONTAINER_NAME
+    expiration_secs = None  # URLs won't expire
+
+# Optional: Test connection on startup
+try:
+    blob_service = BlobServiceClient.from_connection_string(AZURE_BLOB_CONNECTION_STRING)
+    container_client = blob_service.get_container_client(AZURE_BLOB_CONTAINER_NAME)
+    print("✅ Azure Blob Storage connection OK")
+except Exception as e:
+    print("❌ Azure Blob Storage connection FAILED:", e)
