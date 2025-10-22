@@ -67,3 +67,5 @@ Test the connection again
 ``` bash
 python manage.py dbshell
 ```
+
+brew install poppler
