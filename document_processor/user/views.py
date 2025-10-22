@@ -93,14 +93,20 @@ def home(request):
             messages.success(request, f"File '{uploaded_file.name}' uploaded successfully to Azure!")
             return redirect("home")
 
-        # File deletion (mark archived)
+        # File deletion (actual removal from Azure)
         if "delete_file" in request.POST:
             file_id = request.POST.get("delete_file")
             try:
                 file_to_delete = UploadedFile.objects.get(id=file_id, user=request.user)
-                file_to_delete.is_archieved = True
-                file_to_delete.save()
-                messages.success(request, f"File '{file_to_delete.file.name}' deleted successfully!")
+
+                # Delete the file from Azure Blob Storage
+                if file_to_delete.file:
+                    file_to_delete.file.delete(save=False)  # removes from Azure
+                    print(f"🗑️ File deleted from Azure Blob Storage: {file_to_delete.file.name}")
+
+                # Remove DB record
+                file_to_delete.delete()
+                messages.success(request, "File deleted successfully from Azure!")
             except UploadedFile.DoesNotExist:
                 messages.error(request, "The file does not exist or you do not have permission to delete it!")
             return redirect("home")
@@ -109,7 +115,7 @@ def home(request):
     # Prepare uploaded files for display
     # -----------------------------
     if request.user.is_authenticated:
-        uploaded_files = UploadedFile.objects.filter(user=request.user, is_archieved=False).annotate(
+        uploaded_files = UploadedFile.objects.filter(user=request.user).annotate(
             total_pages=Count("processed_images"),
             unsplit_pages=Count("processed_images", filter=Q(processed_images__is_split=False))
         ).filter(
