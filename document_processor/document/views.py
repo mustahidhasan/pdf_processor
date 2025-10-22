@@ -22,30 +22,43 @@ def process(request, file_id):
     with uploaded_file.file.open("rb") as f:
         pdf_bytes = f.read()
 
+    # Check if images were already processed
     processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
     if not processed_pages.exists():
         try:
+            # Convert PDF to images
             images = convert_from_bytes(pdf_bytes, 300)
             for page_num, image in enumerate(images):
                 img_io = io.BytesIO()
-                image.save(img_io, "PNG")
+                image.save(img_io, format="PNG")
+
                 img_content = ContentFile(
                     img_io.getvalue(),
                     name=f"processed_files/{uploaded_file.id}/page_{page_num + 1}.png",
                 )
-                ProcessedImage.objects.create(
+
+                processed_image = ProcessedImage.objects.create(
                     uploaded_file=uploaded_file,
                     page_num=page_num + 1,
                     image=img_content,
                     is_split=False,
                 )
+
+                # Log the saved image URL for debugging
+                print(f"Saved image URL: {processed_image.image.url}")
+
             processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
         except Exception as e:
             messages.error(request, f"Error processing PDF: {str(e)}")
             return redirect("home")
 
+    # Prepare data for template
     extracted_pages = [
-        {"page_num": page.page_num, "image_url": page.image.url, "is_split": page.is_split}
+        {
+            "page_num": page.page_num,
+            "image_url": page.image.url,  # use .url to get proper Azure link
+            "is_split": page.is_split,
+        }
         for page in processed_pages
     ]
 
@@ -54,7 +67,6 @@ def process(request, file_id):
         "process.html",
         {"uploaded_file": uploaded_file, "extracted_pages": extracted_pages},
     )
-
 
 @csrf_exempt
 def process_pages(request, file_id):
