@@ -10,7 +10,7 @@ import datetime
 
 from .models import UploadedFile
 from user.auth_backend import EmailOrUsernameBackend
-from user.storages_backends import AzureMediaStorage
+from document_processor.storages_backends import AzureMediaStorage
 
 
 def home(request):

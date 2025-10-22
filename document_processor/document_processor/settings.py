@@ -91,4 +91,4 @@ AZURE_STORAGE_ACCOUNT_NAME = "splitterstorage"
 AZURE_STORAGE_ACCOUNT_KEY = "UiI3HzkXvAud0u/JzCn+CsLa24zNfcyM9xlqAvt7X2bhM1aa6OpVBXxgtc4qgRvbznnlBloLpM+J+ASt3LxSOA=="
 AZURE_BLOB_CONTAINER_NAME = "comax-images-db"
 
-DEFAULT_FILE_STORAGE = "user.storages_backends.AzureMediaStorage"
+DEFAULT_FILE_STORAGE = "document_processor.storage_backend.AzureMediaStorage"
