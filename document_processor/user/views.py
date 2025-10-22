@@ -101,8 +101,9 @@ def home(request):
 
                 # Delete the file from Azure Blob Storage
                 if file_to_delete.file:
-                    file_to_delete.file.delete(save=False)  # removes from Azure
-                    print(f"🗑️ File deleted from Azure Blob Storage: {file_to_delete.file.name}")
+                    file_name = file_to_delete.file.name  # save name before deletion
+                    file_to_delete.file.delete(save=False)  # deletes from Azure
+                    print(f"🗑️ File deleted from Azure Blob Storage: {file_name}")
 
                 # Remove DB record
                 file_to_delete.delete()
