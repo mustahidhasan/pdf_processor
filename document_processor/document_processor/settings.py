@@ -23,7 +23,50 @@ INSTALLED_APPS = [
     "corsheaders",
     "storages",
 ]
-
+JAZZMIN_SETTINGS = {
+    "site_title": "Document Processor Admin",
+    "site_header": "Document Processor",
+    "site_brand": "Document Processor",
+    "welcome_sign": "Welcome to Document Processor Admin",
+    "topmenu_links": [
+        {"name": "Home", "url": "/", "icon": "fa fa-home"},
+        {"name": "Logout", "url": "/logout", "icon": "fa fa-sign-out-alt"},
+    ],
+    "show_ui_builder": False,  # Set to True to enable the UI builder
+    "default_icon_parents": "fa fa-folder",
+    "default_icon_children": "fa fa-file",
+}
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": True,
+    "brand_small_text": False,
+    "brand_colour": "navbar-info",
+    "accent": "accent-info",
+    "navbar": "navbar-white navbar-light",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": True,
+    "sidebar_fixed": False,
+    "sidebar": "sidebar-light-primary",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": False,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": True,
+    "sidebar_nav_flat_style": False,
+    "theme": "spacelab",
+    "dark_mode_theme": None,
+    "button_classes": {
+        "primary": "btn-outline-primary",
+        "secondary": "btn-outline-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success"
+    }
+}
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
