@@ -68,46 +68,45 @@ def process(request, file_id):
         {"uploaded_file": uploaded_file, "extracted_pages": extracted_pages},
     )
 
-@csrf_exempt
+@login_required
+@csrf_exempt  # keep this only if you must accept AJAX/form-data without CSRF token
 def process_pages(request, file_id):
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
-    token = request.session.get("jwt_token")
-    payload = request.session.get("jwt_payload")
-    expiration = request.session.get("jwt_expiration")
+    # Fetch the uploaded file owned by this user
+    uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
 
-    if not token or not payload:
-        messages.error(request, "No valid session found. Please log in again.")
-        return redirect("login")
-
-    user_email = payload.get("sub")
-    if not user_email or not request.user.is_authenticated:
-        return JsonResponse({"error": "User not authenticated or JWT invalid."}, status=401)
-
-    uploaded_file = get_object_or_404(UploadedFile, id=file_id)
     selected_groups = request.POST.getlist("selected_groups")
     sender_email = request.user.email
 
-    if not selected_groups or not sender_email:
+    if not selected_groups:
         return JsonResponse({"error": "Missing required data."}, status=400)
 
-    # Read PDF bytes from Azure
+    # Read the PDF from Azure storage
     with uploaded_file.file.open("rb") as f:
         pdf_bytes = f.read()
+
     pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
     pdf_writer = PdfWriter()
 
+    # Collect all selected page groups
     for group in selected_groups:
         pages = parse_page_group(group)
         for page_num in pages:
-            pdf_writer.add_page(pdf_reader.pages[page_num - 1])
+            try:
+                pdf_writer.add_page(pdf_reader.pages[page_num - 1])
+            except IndexError:
+                return JsonResponse({"error": f"Invalid page number: {page_num}"}, status=400)
 
-    # Save processed PDF directly to Azure
+    # Save processed PDF to Azure
     pdf_io = io.BytesIO()
     pdf_writer.write(pdf_io)
+
     unique_filename = f"processed_{file_id}_{request.user.id}_{uuid.uuid4().hex}.pdf"
-    pdf_content = ContentFile(pdf_io.getvalue(), name=f"processed_img_pdf/{unique_filename}")
+    pdf_content = ContentFile(
+        pdf_io.getvalue(), name=f"processed_img_pdf/{unique_filename}"
+    )
 
     processed_pdf = ProcessedPDF.objects.create(
         user=request.user,
@@ -115,12 +114,14 @@ def process_pages(request, file_id):
         file_path=pdf_content,
     )
 
-    # Mark pages as split
+    # Mark the split pages
     for group in selected_groups:
         pages = parse_page_group(group)
-        ProcessedImage.objects.filter(uploaded_file=uploaded_file, page_num__in=pages).update(is_split=True)
+        ProcessedImage.objects.filter(
+            uploaded_file=uploaded_file, page_num__in=pages
+        ).update(is_split=True)
 
-    # Send PDF via webhook
+    # Send the processed PDF to webhook
     webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
     try:
         with processed_pdf.file_path.open("rb") as f:
@@ -129,13 +130,26 @@ def process_pages(request, file_id):
             response = requests.post(webhook_url, headers=headers, files=files)
 
         if response.status_code != 200:
-            return JsonResponse({"error": f"Failed to send PDF: {response.status_code} {response.text}"}, status=500)
+            return JsonResponse(
+                {
+                    "error": f"Failed to send PDF: {response.status_code} {response.text}"
+                },
+                status=500,
+            )
+
     except Exception as e:
-        return JsonResponse({"error": f"Failed to send PDF: {e}"}, status=500)
+        return JsonResponse({"error": f"Failed to send PDF: {str(e)}"}, status=500)
 
-    return JsonResponse({"message": "PDF processed successfully.", "processed_pdf_url": processed_pdf.file_path.url, "continue_selection": True})
+    return JsonResponse(
+        {
+            "message": "PDF processed successfully.",
+            "processed_pdf_url": processed_pdf.file_path.url,
+            "continue_selection": True,
+        }
+    )
 
 
+# Keep parse_page_group as-is
 def parse_page_group(group):
     pages = []
     for part in group.split(","):
@@ -145,7 +159,6 @@ def parse_page_group(group):
         else:
             pages.append(int(part))
     return pages
-
 
 @login_required
 def processed_doc(request):
