@@ -1,7 +1,6 @@
 import io
 import uuid
-import threading
-import requests
+import asyncio
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -22,11 +21,10 @@ from .models import ProcessedImage, ProcessedPDF
 def process(request, file_id):
     uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
 
-    # Read PDF from Azure
+    # Read PDF
     with uploaded_file.file.open("rb") as f:
         pdf_bytes = f.read()
 
-    # Check if images were already processed
     processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
     if not processed_pages.exists():
         try:
@@ -40,19 +38,17 @@ def process(request, file_id):
                     name=f"processed_files/{uploaded_file.id}/page_{page_num + 1}.png",
                 )
 
-                processed_image = ProcessedImage.objects.create(
+                ProcessedImage.objects.create(
                     uploaded_file=uploaded_file,
                     page_num=page_num + 1,
                     image=img_content,
                     is_split=False,
                 )
-                print(f"Saved image URL: {processed_image.image.url}")
-
-            processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
-
         except Exception as e:
             messages.error(request, f"Error processing PDF: {str(e)}")
             return redirect("home")
+
+        processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
 
     extracted_pages = [
         {
@@ -71,7 +67,7 @@ def process(request, file_id):
 
 
 # --------------------------
-# Helper to parse page groups
+# Helper: Parse page group like "1-3,5"
 # --------------------------
 def parse_page_group(group):
     pages = []
@@ -85,96 +81,96 @@ def parse_page_group(group):
 
 
 # --------------------------
-# Background PDF processing
+# Async PDF processing (awaitable)
 # --------------------------
-def process_pdf_task(user_id, file_id, selected_groups, sender_email):
+import requests  # no change needed
+
+async def process_pdf_async(user_id, file_id, selected_groups, sender_email):
     from django.contrib.auth.models import User
     from .models import ProcessedPDF, ProcessedImage
     from user.models import UploadedFile
 
-    user = User.objects.get(id=user_id)
-    uploaded_file = UploadedFile.objects.get(id=file_id)
+    user = await asyncio.to_thread(User.objects.get, id=user_id)
+    uploaded_file = await asyncio.to_thread(UploadedFile.objects.get, id=file_id)
 
-    with uploaded_file.file.open("rb") as f:
-        pdf_bytes = f.read()
+    pdf_bytes = await asyncio.to_thread(lambda: uploaded_file.file.read())
 
     pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
     pdf_writer = PdfWriter()
+    all_pages = []
 
     try:
-        all_pages = []
-
-        # Collect and add selected pages
         for group in selected_groups:
             pages = parse_page_group(group)
             all_pages.extend(pages)
             for page_num in pages:
                 pdf_writer.add_page(pdf_reader.pages[page_num - 1])
 
-        # Save processed PDF
         pdf_io = io.BytesIO()
         pdf_writer.write(pdf_io)
 
         unique_filename = f"processed_{file_id}_{user_id}_{uuid.uuid4().hex}.pdf"
         pdf_content = ContentFile(pdf_io.getvalue(), name=f"processed_img_pdf/{unique_filename}")
 
-        processed_pdf = ProcessedPDF.objects.create(
+        processed_pdf = await asyncio.to_thread(
+            ProcessedPDF.objects.create,
             user=user,
             uploaded_file=uploaded_file,
             file_path=pdf_content,
         )
 
-        # Send to webhook
-        webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
-        with processed_pdf.file_path.open("rb") as f:
-            files = {"file": f}
-            headers = {"sender_name": sender_email}
-            response = requests.post(webhook_url, headers=headers, files=files)
+        # Use requests in a thread to avoid blocking async loop
+        def send_webhook():
+            webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
+            with processed_pdf.file_path.open("rb") as f:
+                files = {"file": (processed_pdf.file_path.name, f, "application/pdf")}
+                headers = {"sender_name": sender_email}
+                return requests.post(webhook_url, headers=headers, files=files)
+
+        response = await asyncio.to_thread(send_webhook)
 
         if response.status_code == 200:
-            # Mark pages as split only if webhook succeeded
-            ProcessedImage.objects.filter(
-                uploaded_file=uploaded_file, page_num__in=all_pages
-            ).update(is_split=True)
+            await asyncio.to_thread(
+                ProcessedImage.objects.filter(
+                    uploaded_file=uploaded_file, page_num__in=all_pages
+                ).update,
+                is_split=True,
+            )
+            return {"success": True, "message": "PDF processed and webhook responded successfully."}
         else:
-            print(f"[Webhook error] Status: {response.status_code}, Response: {response.text}")
+            return {"success": False, "message": f"Webhook failed: {response.text}"}
 
     except Exception as e:
-        print(f"[PDF processing failed] file_id={file_id}, error={str(e)}")
-        # Do not mark pages as processed if failed
-
+        return {"success": False, "message": f"Error processing PDF: {str(e)}"}
 
 # --------------------------
-# Async view for page processing
+# Async view for processing selected pages
 # --------------------------
 @login_required
 @csrf_exempt
-def process_pages(request, file_id):
+async def process_pages(request, file_id):
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
-    uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
+    uploaded_file = await asyncio.to_thread(
+        get_object_or_404, UploadedFile, id=file_id, user=request.user
+    )
     selected_groups = request.POST.getlist("selected_groups")
     sender_email = request.user.email
 
     if not selected_groups:
-        return JsonResponse({"error": "Missing required data."}, status=400)
+        return JsonResponse({"error": "No pages selected."}, status=400)
 
-    # Launch background thread
-    thread = threading.Thread(
-        target=process_pdf_task,
-        args=(request.user.id, file_id, selected_groups, sender_email),
-    )
-    thread.start()
+    result = await process_pdf_async(request.user.id, file_id, selected_groups, sender_email)
 
-    # Immediate response
-    return JsonResponse(
-        {"message": "PDF processing started in background.", "continue_selection": True}
-    )
+    if result["success"]:
+        return JsonResponse({"status": "success", "message": result["message"]})
+    else:
+        return JsonResponse({"status": "error", "message": result["message"]})
 
 
 # --------------------------
-# View for listing processed/unprocessed docs
+# List processed/unprocessed docs
 # --------------------------
 @login_required
 def processed_doc(request):
@@ -188,7 +184,10 @@ def processed_doc(request):
     return render(
         request,
         "processed_document.html",
-        {"unprocessed_files": unprocessed_files, "grouped_processed_files": grouped_processed_files},
+        {
+            "unprocessed_files": unprocessed_files,
+            "grouped_processed_files": grouped_processed_files,
+        },
     )
 
 
@@ -212,7 +211,7 @@ def delete_document(request, file_id):
 
 
 # --------------------------
-# Upload PDFs
+# Upload PDFs via webhook
 # --------------------------
 @csrf_exempt
 def upload_pdfs(request):
@@ -232,7 +231,10 @@ def upload_pdfs(request):
             UploadedFile.objects.create(file=file, user=user)
 
         return JsonResponse(
-            {"message": "Files uploaded successfully.", "uploaded_files": [{"file_name": file.name} for file in files]},
+            {
+                "message": "Files uploaded successfully.",
+                "uploaded_files": [{"file_name": file.name} for file in files],
+            },
             status=201,
         )
 
