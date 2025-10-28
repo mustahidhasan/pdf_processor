@@ -15,7 +15,6 @@
     align-items: center;
     z-index: 1050;
 }
-
 .loading-circle {
     width: 120px;
     height: 120px;
@@ -25,18 +24,15 @@
     align-items: center;
     box-shadow: 0 0 15px rgba(0, 13, 19, 0.5);
 }
-
 .spinner-border {
     width: 3rem;
     height: 3rem;
     color: rgb(12, 54, 131) !important;
 }
-
 .page-split {
     background-color: #d3d3d3 !important;
     opacity: 0.7;
 }
-
 .page-log {
     font-size: 0.9rem;
     color: #495057;
@@ -47,12 +43,12 @@
 }
 </style>
 
-<div class="container mt-4">
-    <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
-        ✅ PDF processed successfully! Select another set of pages to process.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+<!-- Toast container -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1200;">
+  <div id="toastContainer"></div>
+</div>
 
+<div class="container mt-4">
     <div id="loadingSpinner" class="loading-overlay" style="display: none;">
         <div class="loading-circle">
             <div class="spinner-border text-light" role="status"></div>
@@ -67,7 +63,8 @@
         <h3>Select Pages</h3>
         <div class="form-group">
             <label for="page_range">Page Range:</label>
-            <input type="text" class="form-control" id="page_range" name="page_range" placeholder="e.g., 1-3, 5, 7-9" oninput="selectPagesBasedOnRange()">
+            <input type="text" class="form-control" id="page_range" name="page_range"
+                placeholder="e.g., 1-3, 5, 7-9" oninput="selectPagesBasedOnRange()">
         </div>
 
         <div class="mt-3 mb-4">
@@ -78,7 +75,11 @@
             {% for page in extracted_pages %}
                 <div class="col-md-3 mb-4 page-card {% if page.is_split %}page-split{% endif %}" id="pageCard{{ page.page_num }}">
                     <div class="card shadow-sm">
-                        <img src="{{ page.image_url }}" class="card-img-top" alt="Page {{ page.page_num }}" style="width:100%; height: auto;" data-toggle="modal" data-target="#imageModal{{ page.page_num }}">
+                        <!-- MODAL TRIGGER FIXED -->
+                        <img src="{{ page.image_url }}" class="card-img-top" alt="Page {{ page.page_num }}"
+                             style="cursor:pointer; width:100%; height:auto;"
+                             data-bs-toggle="modal" data-bs-target="#imageModal{{ page.page_num }}">
+
                         <div class="card-body">
                             <h5 class="card-title">Page {{ page.page_num }}</h5>
 
@@ -86,7 +87,8 @@
                                 <div class="page-log">✅ Already split</div>
                             {% else %}
                                 <div class="form-check">
-                                    <input type="checkbox" name="selected_groups" value="{{ page.page_num }}" id="page{{ page.page_num }}" class="form-check-input">
+                                    <input type="checkbox" name="selected_groups" value="{{ page.page_num }}"
+                                           id="page{{ page.page_num }}" class="form-check-input">
                                     <label class="form-check-label" for="page{{ page.page_num }}">Select Page</label>
                                 </div>
                             {% endif %}
@@ -94,16 +96,17 @@
                     </div>
                 </div>
 
-                <!-- Modal for image preview -->
-                <div class="modal fade" id="imageModal{{ page.page_num }}" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel{{ page.page_num }}" aria-hidden="true">
-                    <div class="modal-dialog" role="document">
+                <!-- MODAL FIXED FOR BOOTSTRAP 5 -->
+                <div class="modal fade" id="imageModal{{ page.page_num }}" tabindex="-1"
+                     aria-labelledby="imageModalLabel{{ page.page_num }}" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
                         <div class="modal-content">
                             <div class="modal-header">
-                                <h5 class="modal-title">Page {{ page.page_num }}</h5>
-                                <button type="button" class="btn-close" data-dismiss="modal"></button>
+                                <h5 class="modal-title" id="imageModalLabel{{ page.page_num }}">Page {{ page.page_num }}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="modal-body">
-                                <img src="{{ page.image_url }}" class="img-fluid" alt="Page {{ page.page_num }}">
+                            <div class="modal-body text-center">
+                                <img src="{{ page.image_url }}" class="img-fluid rounded shadow-sm" alt="Page {{ page.page_num }}">
                             </div>
                         </div>
                     </div>
@@ -114,6 +117,7 @@
 </div>
 
 <script>
+// ---------- RANGE SELECTION ----------
 function selectPagesBasedOnRange() {
     const rangeInput = document.getElementById('page_range').value.trim();
     const checkboxes = document.querySelectorAll('input[name="selected_groups"]');
@@ -135,6 +139,27 @@ function selectPagesBasedOnRange() {
     });
 }
 
+// ---------- TOASTS ----------
+function showToast(message, type = "info") {
+    const container = document.getElementById("toastContainer");
+    const toastId = "toast" + Date.now();
+    const bgClass = type === "success" ? "bg-success" : (type === "error" ? "bg-danger" : "bg-secondary");
+    const icon = type === "success" ? "✅" : (type === "error" ? "❌" : "ℹ️");
+
+    const toastHTML = `
+      <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">${icon} ${message}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+      </div>`;
+    container.insertAdjacentHTML("beforeend", toastHTML);
+
+    const toastElement = new bootstrap.Toast(document.getElementById(toastId), { delay: 4000 });
+    toastElement.show();
+}
+
+// ---------- SUBMIT HANDLER ----------
 document.getElementById('pdfProcessingForm').addEventListener('submit', async function (event) {
     event.preventDefault();
     document.getElementById("loadingSpinner").style.display = "flex";
@@ -152,31 +177,30 @@ document.getElementById('pdfProcessingForm').addEventListener('submit', async fu
         document.getElementById("loadingSpinner").style.display = "none";
 
         if (data.status === "success") {
-            document.getElementById("successMessage").style.display = "block";
+            showToast(data.message, "success");
 
-            // Remove processed pages
+            // Remove processed pages only on success
             document.querySelectorAll('input[name="selected_groups"]:checked').forEach(cb => {
                 const pageCard = document.getElementById('pageCard' + cb.value);
                 if (pageCard) pageCard.remove();
             });
             document.getElementById('page_range').value = "";
 
-            // Remove form if all pages are done
             const remaining = document.querySelectorAll('.page-card:not(.page-split)');
             if (remaining.length === 0) {
                 document.getElementById("pdfProcessingForm").remove();
                 const doneMsg = document.createElement("div");
                 doneMsg.className = "alert alert-info mt-4";
-                doneMsg.innerText = "✅ All pages have been processed. You may return to the dashboard.";
+                doneMsg.innerText = "✅ All pages have been processed.";
                 document.querySelector('.container').appendChild(doneMsg);
             }
         } else {
-            alert("Error: " + data.message);
+            showToast(data.message, "error");
         }
     } catch (error) {
         document.getElementById("loadingSpinner").style.display = "none";
         console.error("Error:", error);
-        alert("An unexpected error occurred.");
+        showToast("Unexpected error occurred.", "error");
     }
 });
 </script>

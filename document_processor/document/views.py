@@ -1,6 +1,7 @@
 import io
 import uuid
 import asyncio
+import requests
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -16,18 +17,19 @@ from .models import ProcessedImage, ProcessedPDF
 
 
 # --------------------------
-# PDF-to-image processing
+# PDF-to-image conversion (initial step)
 # --------------------------
+@login_required
 def process(request, file_id):
     uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
 
-    # Read PDF
-    with uploaded_file.file.open("rb") as f:
-        pdf_bytes = f.read()
-
+    # Convert to images if not already processed
     processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
     if not processed_pages.exists():
         try:
+            with uploaded_file.file.open("rb") as f:
+                pdf_bytes = f.read()
+
             images = convert_from_bytes(pdf_bytes, 300)
             for page_num, image in enumerate(images):
                 img_io = io.BytesIO()
@@ -44,6 +46,7 @@ def process(request, file_id):
                     image=img_content,
                     is_split=False,
                 )
+
         except Exception as e:
             messages.error(request, f"Error processing PDF: {str(e)}")
             return redirect("home")
@@ -67,11 +70,14 @@ def process(request, file_id):
 
 
 # --------------------------
-# Helper: Parse page group like "1-3,5"
+# Parse "1-3,5,7-8"
 # --------------------------
 def parse_page_group(group):
     pages = []
     for part in group.split(","):
+        part = part.strip()
+        if not part:
+            continue
         if "-" in part:
             start, end = map(int, part.split("-"))
             pages.extend(range(start, end + 1))
@@ -81,25 +87,18 @@ def parse_page_group(group):
 
 
 # --------------------------
-# Async PDF processing (awaitable)
+# Async PDF processor
 # --------------------------
-import requests  # no change needed
-
 async def process_pdf_async(user_id, file_id, selected_groups, sender_email):
-    from django.contrib.auth.models import User
-    from .models import ProcessedPDF, ProcessedImage
-    from user.models import UploadedFile
-
-    user = await asyncio.to_thread(User.objects.get, id=user_id)
-    uploaded_file = await asyncio.to_thread(UploadedFile.objects.get, id=file_id)
-
-    pdf_bytes = await asyncio.to_thread(lambda: uploaded_file.file.read())
-
-    pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
-    pdf_writer = PdfWriter()
-    all_pages = []
-
     try:
+        user = await asyncio.to_thread(User.objects.get, id=user_id)
+        uploaded_file = await asyncio.to_thread(UploadedFile.objects.get, id=file_id)
+
+        pdf_bytes = await asyncio.to_thread(lambda: uploaded_file.file.read())
+        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+        pdf_writer = PdfWriter()
+        all_pages = []
+
         for group in selected_groups:
             pages = parse_page_group(group)
             all_pages.extend(pages)
@@ -119,7 +118,7 @@ async def process_pdf_async(user_id, file_id, selected_groups, sender_email):
             file_path=pdf_content,
         )
 
-        # Use requests in a thread to avoid blocking async loop
+        # Send webhook safely in background
         def send_webhook():
             webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
             with processed_pdf.file_path.open("rb") as f:
@@ -136,39 +135,40 @@ async def process_pdf_async(user_id, file_id, selected_groups, sender_email):
                 ).update,
                 is_split=True,
             )
-            return {"success": True, "message": "PDF processed and webhook responded successfully."}
+            return {"status": "success", "message": "✅ PDF processed and sent successfully!"}
         else:
-            return {"success": False, "message": f"Webhook failed: {response.text}"}
+            await asyncio.to_thread(processed_pdf.delete)
+            return {
+                "status": "error",
+                "message": f"Webhook failed ({response.status_code}): {response.text}",
+            }
 
     except Exception as e:
-        return {"success": False, "message": f"Error processing PDF: {str(e)}"}
+        return {"status": "error", "message": str(e)}
+
 
 # --------------------------
-# Async view for processing selected pages
+# AJAX async endpoint
 # --------------------------
 @login_required
 @csrf_exempt
 async def process_pages(request, file_id):
     if request.method != "POST":
-        return JsonResponse({"error": "Invalid request method."}, status=400)
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
 
     uploaded_file = await asyncio.to_thread(
         get_object_or_404, UploadedFile, id=file_id, user=request.user
     )
+
     selected_groups = request.POST.getlist("selected_groups")
     sender_email = request.user.email
 
     if not selected_groups:
-        return JsonResponse({"error": "No pages selected."}, status=400)
+        return JsonResponse({"status": "error", "message": "No pages selected."}, status=400)
 
     result = await process_pdf_async(request.user.id, file_id, selected_groups, sender_email)
 
-    if result["success"]:
-        return JsonResponse({"status": "success", "message": result["message"]})
-    else:
-        return JsonResponse({"status": "error", "message": result["message"]})
-
-
+    return JsonResponse(result)
 # --------------------------
 # List processed/unprocessed docs
 # --------------------------
