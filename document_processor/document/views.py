@@ -11,6 +11,7 @@ from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
+from django.utils.decorators import sync_and_async_middleware
 
 from user.models import UploadedFile
 from .models import ProcessedImage, ProcessedPDF
@@ -19,39 +20,55 @@ from .models import ProcessedImage, ProcessedPDF
 # --------------------------
 # PDF-to-image conversion (initial step)
 # --------------------------
-@login_required
-def process(request, file_id):
-    uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
+@sync_and_async_middleware
+async def process(request, file_id):
+    uploaded_file = await asyncio.to_thread(
+        lambda: get_object_or_404(UploadedFile, id=file_id, user=request.user)
+    )
 
-    # Convert to images if not already processed
-    processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
-    if not processed_pages.exists():
+    processed_pages = await asyncio.to_thread(
+        lambda: list(ProcessedImage.objects.filter(uploaded_file=uploaded_file))
+    )
+
+    if not processed_pages:
         try:
-            with uploaded_file.file.open("rb") as f:
-                pdf_bytes = f.read()
+            # Open and read file in thread pool
+            def read_pdf():
+                with uploaded_file.file.open("rb") as f:
+                    return f.read()
 
-            images = convert_from_bytes(pdf_bytes, 300)
-            for page_num, image in enumerate(images):
-                img_io = io.BytesIO()
-                image.save(img_io, format="PNG")
+            pdf_bytes = await asyncio.to_thread(read_pdf)
 
-                img_content = ContentFile(
-                    img_io.getvalue(),
-                    name=f"processed_files/{uploaded_file.id}/page_{page_num + 1}.png",
-                )
+            # Convert PDF to images in thread pool (CPU-bound)
+            images = await asyncio.to_thread(convert_from_bytes, pdf_bytes, 300)
 
-                ProcessedImage.objects.create(
-                    uploaded_file=uploaded_file,
-                    page_num=page_num + 1,
-                    image=img_content,
-                    is_split=False,
-                )
+            # Save images
+            def save_images():
+                for page_num, image in enumerate(images):
+                    img_io = io.BytesIO()
+                    image.save(img_io, format="PNG")
+
+                    img_content = ContentFile(
+                        img_io.getvalue(),
+                        name=f"processed_files/{uploaded_file.id}/page_{page_num + 1}.png",
+                    )
+
+                    ProcessedImage.objects.create(
+                        uploaded_file=uploaded_file,
+                        page_num=page_num + 1,
+                        image=img_content,
+                        is_split=False,
+                    )
+
+            await asyncio.to_thread(save_images)
 
         except Exception as e:
             messages.error(request, f"Error processing PDF: {str(e)}")
             return redirect("home")
 
-        processed_pages = ProcessedImage.objects.filter(uploaded_file=uploaded_file)
+        processed_pages = await asyncio.to_thread(
+            lambda: list(ProcessedImage.objects.filter(uploaded_file=uploaded_file))
+        )
 
     extracted_pages = [
         {
@@ -118,14 +135,41 @@ async def process_pdf_async(user_id, file_id, selected_groups, sender_email):
             file_path=pdf_content,
         )
 
-        # Send webhook safely in background
+        # --------------------------
+        # Safe webhook sender
+        # --------------------------
         def send_webhook():
             webhook_url = "https://backend-webhooks.azurewebsites.net/api/gmail_backend_webhook2"
-            with processed_pdf.file_path.open("rb") as f:
-                files = {"file": (processed_pdf.file_path.name, f, "application/pdf")}
-                headers = {"sender_name": sender_email}
-                return requests.post(webhook_url, headers=headers, files=files)
 
+            # Read fully to prevent "Unable to stream download"
+            file_data = processed_pdf.file_path.read()
+
+            files = {
+                "file": (
+                    processed_pdf.file_path.name,
+                    io.BytesIO(file_data),
+                    "application/pdf"
+                )
+            }
+            headers = {"sender_name": sender_email}
+
+            # Disable streaming to avoid warning
+            return requests.post(webhook_url, headers=headers, files=files, stream=False, timeout=30)
+
+        # --------------------------
+        # Safe deletion helper
+        # --------------------------
+        def delete_processed_pdf():
+            try:
+                if processed_pdf.file_path:
+                    file_name = processed_pdf.file_path.name
+                    processed_pdf.file_path.delete(save=False)  # Deletes from Azure Blob
+                    print(f"🗑️ Deleted failed upload from Azure Blob: {file_name}")
+                processed_pdf.delete()
+            except Exception as e:
+                print(f"⚠️ Failed to delete blob after webhook error: {e}")
+
+        # Execute webhook
         response = await asyncio.to_thread(send_webhook)
 
         if response.status_code == 200:
@@ -137,7 +181,7 @@ async def process_pdf_async(user_id, file_id, selected_groups, sender_email):
             )
             return {"status": "success", "message": "✅ PDF processed and sent successfully!"}
         else:
-            await asyncio.to_thread(processed_pdf.delete)
+            await asyncio.to_thread(delete_processed_pdf)
             return {
                 "status": "error",
                 "message": f"Webhook failed ({response.status_code}): {response.text}",
@@ -167,8 +211,9 @@ async def process_pages(request, file_id):
         return JsonResponse({"status": "error", "message": "No pages selected."}, status=400)
 
     result = await process_pdf_async(request.user.id, file_id, selected_groups, sender_email)
-
     return JsonResponse(result)
+
+
 # --------------------------
 # List processed/unprocessed docs
 # --------------------------
