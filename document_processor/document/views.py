@@ -100,6 +100,33 @@ def parse_page_group(group):
 
 
 # --------------------------
+# Rollback helper if webhook fails
+# --------------------------
+def rollback_failed_upload(processed_pdf):
+    """Safely delete failed processed PDF and revert image split state."""
+    try:
+        pdf_id = processed_pdf.id  # store before deleting
+        if processed_pdf.file_path:
+            file_name = processed_pdf.file_path.name
+            processed_pdf.file_path.delete(save=False)
+            print(f"🗑️ Deleted failed upload from Azure Blob: {file_name}")
+
+        uploaded_file = processed_pdf.uploaded_file
+        related_images = ProcessedImage.objects.filter(
+            uploaded_file=uploaded_file, is_split=True
+        )
+        updated_count = related_images.update(is_split=False)
+        print(f"🔄 Reverted {updated_count} pages back to unsplit for file {uploaded_file.id}")
+
+        processed_pdf.delete()
+        print(f"🗑️ Deleted ProcessedPDF entry (ID: {pdf_id})")
+
+    except Exception as e:
+        print(f"⚠️ Rollback failed for processed_pdf {processed_pdf.id}: {e}")
+
+
+
+# --------------------------
 # Background webhook sender
 # --------------------------
 def send_webhook_background(processed_pdf, sender_email):
@@ -130,22 +157,11 @@ def send_webhook_background(processed_pdf, sender_email):
                 print(
                     f"❌ Webhook failed ({response.status_code}) for {processed_pdf.file_path.name}: {response.text}"
                 )
-                if processed_pdf.file_path:
-                    file_name = processed_pdf.file_path.name
-                    processed_pdf.file_path.delete(save=False)
-                    print(f"🗑️ Deleted failed upload from Azure Blob: {file_name}")
-                processed_pdf.delete()
+                rollback_failed_upload(processed_pdf)
 
         except Exception as e:
             print(f"⚠️ Background webhook error for {processed_pdf.id}: {e}")
-            try:
-                if processed_pdf.file_path:
-                    file_name = processed_pdf.file_path.name
-                    processed_pdf.file_path.delete(save=False)
-                    print(f"🗑️ Deleted failed upload from Azure Blob (exception): {file_name}")
-                processed_pdf.delete()
-            except Exception as inner_e:
-                print(f"⚠️ Failed to cleanup after webhook exception: {inner_e}")
+            rollback_failed_upload(processed_pdf)
 
     threading.Thread(target=_run, daemon=True).start()
 
